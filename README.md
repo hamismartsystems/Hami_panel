@@ -71,7 +71,7 @@
 | ساب‌لینک (base64) | ✅ انجام‌شده |
 | پایگاه داده و مدلِ کاربر/اینباند/ترافیک/گره/رویداد | ✅ انجام‌شده (`internal/store`) |
 | مدیریتِ فرایندِ Xray و تولیدِ کانفیگ سازگار با لینک | ✅ `hami gen` + `internal/xray` |
-| **تستِ واقعیِ کانفیگ (canary)** | 🚧 مرحلهٔ بعد |
+| **تستِ واقعیِ کانفیگ (canary)** | ✅ `hami canary` — عبورِ ترافیک با خودِ لینک |
 | رابطِ وب، API عمومی، بات تلگرام، چندسروره، مهاجرت | 📋 برنامه‌ریزی‌شده |
 
 نقشهٔ کامل: [docs/ROADMAP.md](docs/ROADMAP.md) · طراحی: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
@@ -82,13 +82,17 @@
 git clone https://github.com/hamismartsystems/Hami_panel
 cd hami-panel
 go test ./...          # لینک، پایگاه، کانفیگِ Xray — باید همه سبز باشد
+# آزمونِ زنده؛ بدون XRAY_BIN این بخش رد می‌شود، نه اینکه سبزِ دروغین بدهد
+XRAY_BIN=/path/to/xray go test ./internal/xray/ -count=1 -run Canary
 go build -o hami ./cmd/hami
 ./hami gen -spec inbounds.json -out config.json
+./hami canary -spec inbounds.json -xray /path/to/xray
 ```
 
 `inbounds.json` همان اینباندی است که لینک از آن ساخته می‌شود، به‌اضافهٔ `privateKey`
 و `dest` که فقط در کانفیگِ سرور می‌آیند. اگر Reality نیمه‌کاره باشد، دستور خطا
-می‌دهد و فایل را به‌عنوانِ کانفیگِ سالم تحویل نمی‌دهد.
+می‌دهد و فایل را به‌عنوانِ کانفیگِ سالم تحویل نمی‌دهد. `hami canary` کلاینت را
+فقط از لینکِ ساخته‌شده می‌سازد، نه از کلیدِ خصوصیِ سرور.
 
 ## مجوز
 
