@@ -22,7 +22,7 @@ func openTest(t *testing.T) *Store {
 
 func TestMigrationsCreateSchema(t *testing.T) {
 	s := openTest(t)
-	for _, table := range []string{"inbounds", "clients", "traffic", "nodes", "events"} {
+	for _, table := range []string{"inbounds", "clients", "traffic", "nodes", "events", "inbound_secrets"} {
 		var name string
 		if err := s.db.QueryRow(
 			`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, table).

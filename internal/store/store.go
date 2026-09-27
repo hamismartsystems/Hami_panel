@@ -107,6 +107,14 @@ var migrations = []string{
 		meta    TEXT NOT NULL DEFAULT ''
 	);`,
 	`CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);`,
+	`CREATE TABLE IF NOT EXISTS inbound_secrets (
+		inbound_id  INTEGER PRIMARY KEY REFERENCES inbounds(id) ON DELETE CASCADE,
+		private_key TEXT NOT NULL DEFAULT '',
+		dest        TEXT NOT NULL DEFAULT '',
+		listen      TEXT NOT NULL DEFAULT '0.0.0.0',
+		cert_file   TEXT NOT NULL DEFAULT '',
+		key_file    TEXT NOT NULL DEFAULT ''
+	);`,
 }
 
 func (s *Store) migrate() error {
@@ -243,6 +251,13 @@ func (s *Store) ListInbounds() ([]Inbound, error) {
 
 func (s *Store) DeleteInbound(id int64) error {
 	_, err := s.db.Exec(`DELETE FROM inbounds WHERE id = ?`, id)
+	return err
+}
+
+// SetInboundEnabled turns an inbound on or off. A disabled inbound is left
+// out of the generated Xray config.
+func (s *Store) SetInboundEnabled(id int64, enable bool) error {
+	_, err := s.db.Exec(`UPDATE inbounds SET enable = ? WHERE id = ?`, boolInt(enable), id)
 	return err
 }
 
@@ -408,6 +423,52 @@ func (s *Store) RecentEvents(limit int) ([]Event, error) {
 }
 
 /* ── helpers ─────────────────────────────────────────────────────────── */
+
+/* ── server secrets ──────────────────────────────────────────────────── */
+
+// InboundSecret is what the core needs and the client link must not contain.
+type InboundSecret struct {
+	InboundID  int64
+	PrivateKey string
+	Dest       string
+	Listen     string
+	CertFile   string
+	KeyFile    string
+}
+
+// SetInboundSecret stores or replaces the server-only fields of one inbound.
+func (s *Store) SetInboundSecret(sec InboundSecret) error {
+	if sec.InboundID == 0 {
+		return errors.New("secret needs an inbound")
+	}
+	if sec.Listen == "" {
+		sec.Listen = "0.0.0.0"
+	}
+	_, err := s.db.Exec(`INSERT INTO inbound_secrets
+		(inbound_id, private_key, dest, listen, cert_file, key_file)
+		VALUES (?,?,?,?,?,?)
+		ON CONFLICT(inbound_id) DO UPDATE SET
+			private_key = excluded.private_key,
+			dest = excluded.dest,
+			listen = excluded.listen,
+			cert_file = excluded.cert_file,
+			key_file = excluded.key_file`,
+		sec.InboundID, sec.PrivateKey, sec.Dest, sec.Listen, sec.CertFile, sec.KeyFile)
+	return err
+}
+
+// GetInboundSecret returns the server-only fields. A missing row is an empty
+// secret, not an error — the config builder fails later if Reality needs it.
+func (s *Store) GetInboundSecret(inboundID int64) (InboundSecret, error) {
+	sec := InboundSecret{InboundID: inboundID, Listen: "0.0.0.0"}
+	err := s.db.QueryRow(`SELECT private_key, dest, listen, cert_file, key_file
+		FROM inbound_secrets WHERE inbound_id = ?`, inboundID).
+		Scan(&sec.PrivateKey, &sec.Dest, &sec.Listen, &sec.CertFile, &sec.KeyFile)
+	if errors.Is(err, sql.ErrNoRows) {
+		return sec, nil
+	}
+	return sec, err
+}
 
 func boolInt(b bool) int {
 	if b {
