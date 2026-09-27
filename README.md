@@ -72,6 +72,7 @@
 | پایگاه داده و مدلِ کاربر/اینباند/ترافیک/گره/رویداد | ✅ انجام‌شده (`internal/store`) |
 | مدیریتِ فرایندِ Xray و تولیدِ کانفیگ سازگار با لینک | ✅ `hami gen` + `internal/xray` |
 | **تستِ واقعیِ کانفیگ (canary)** | ✅ `hami canary` — عبورِ ترافیک با خودِ لینک |
+| نگهبانِ پورت / TLS / صحتِ لینک | ✅ `hami guard` — تعمیر فقط ری‌استارتِ همان مشخصات |
 | رابطِ وب، API عمومی، بات تلگرام، چندسروره، مهاجرت | 📋 برنامه‌ریزی‌شده |
 
 نقشهٔ کامل: [docs/ROADMAP.md](docs/ROADMAP.md) · طراحی: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
@@ -87,6 +88,7 @@ XRAY_BIN=/path/to/xray go test ./internal/xray/ -count=1 -run Canary
 go build -o hami ./cmd/hami
 ./hami gen -spec inbounds.json -out config.json
 ./hami canary -spec inbounds.json -xray /path/to/xray
+./hami guard -spec inbounds.json
 ```
 
 `inbounds.json` همان اینباندی است که لینک از آن ساخته می‌شود، به‌اضافهٔ `privateKey`
