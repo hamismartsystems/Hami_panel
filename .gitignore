@@ -1,0 +1,21 @@
+# binaries & build output
+/hami-panel
+/dist/
+/bin/
+
+# runtime data
+data/*.db
+data/*.db-shm
+data/*.db-wal
+/data/
+*.log
+
+# local env
+.env
+*.pem
+*.key
+
+# editors
+.vscode/
+.idea/
+.DS_Store
