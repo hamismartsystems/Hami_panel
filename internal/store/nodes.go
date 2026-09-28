@@ -145,3 +145,63 @@ func (s *Store) MarkNodeStatus(id int64, status string, seen time.Time) error {
 	}
 	return nil
 }
+
+// LeastLoadedInbound picks the inbound that should receive the next new
+// client (stage 3, auto distribution): enabled inbounds only, sitting on a
+// node that is not "down" (unknown/unstable/local-node-0 stay eligible —
+// exactly the same eligibility rule the subscription layer uses), then the
+// one with the fewest clients; ties break by lowest inbound id so the result
+// is deterministic.
+func (s *Store) LeastLoadedInbound() (*Inbound, error) {
+	rows, err := s.db.Query(`
+		SELECT i.id, COUNT(c.id) AS n
+		FROM inbounds i
+		LEFT JOIN clients c ON c.inbound_id = i.id
+		WHERE i.enable = 1
+		  AND (i.node_id = 0 OR COALESCE(
+		      (SELECT status FROM nodes WHERE id = i.node_id), 'unknown') != 'down')
+		GROUP BY i.id
+		ORDER BY n ASC, i.id ASC
+		LIMIT 1`)
+	if err != nil {
+		return nil, err
+	}
+	var inID int64
+	found := false
+	for rows.Next() {
+		if err := rows.Scan(&inID, new(int)); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		found = true
+	}
+	rows.Close()
+	if !found {
+		return nil, ErrNotFound
+	}
+	return s.GetInbound(inID)
+}
+
+// FirstEnabledInboundOnNode returns the lowest-id enabled inbound of a node,
+// used by `user create -node NAME` (explicit manual distribution).
+func (s *Store) FirstEnabledInboundOnNode(nodeID int64) (*Inbound, error) {
+	rows, err := s.db.Query(
+		`SELECT id FROM inbounds WHERE node_id=? AND enable=1 ORDER BY id ASC LIMIT 1`, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	var id int64
+	found := false
+	for rows.Next() {
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		found = true
+	}
+	rows.Close()
+	if !found {
+		return nil, ErrNotFound
+	}
+	return s.GetInbound(id)
+}

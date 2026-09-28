@@ -117,13 +117,14 @@ func findClientOr(st *store.Store, email string) (*store.Client, bool) {
 func gbToBytes(gb float64) int64 { return int64(gb * (1 << 30)) }
 
 func userCreate(args []string) int {
-	var dbPath, email, uid, expireAt string
+	var dbPath, email, uid, expireAt, nodeRef string
 	var inbound int64
 	var quotaGB float64
 	var expireDays, ipLimit, speedKbps int
 	fs, ok := parseFlagSet("user create", args, func(fs *flag.FlagSet) {
 		fs.StringVar(&dbPath, "db", "", "")
 		fs.Int64Var(&inbound, "inbound", 0, "")
+		fs.StringVar(&nodeRef, "node", "", "auto | node name | node id — overrides -inbound")
 		fs.StringVar(&email, "email", "", "")
 		fs.StringVar(&uid, "uuid", "", "")
 		fs.Float64Var(&quotaGB, "quota", 0, "GB, 0 = unlimited")
@@ -141,6 +142,15 @@ func userCreate(args []string) int {
 		return 1
 	}
 	defer st.Close()
+	if nodeRef != "" {
+		picked, err := pickInboundForNodeRef(st, nodeRef)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "-node: %v\n", err)
+			return 1
+		}
+		inbound = picked.ID
+		fmt.Printf("🎯 auto-assigned node → inbound %d (%s)\n", picked.ID, picked.Remark)
+	}
 	if inbound == 0 || email == "" {
 		userUsage()
 		return 2
@@ -185,6 +195,28 @@ func userCreate(args []string) int {
 	logEvent(dbPath, "info", "user", fmt.Sprintf("created %s on inbound %d", email, inbound), "")
 	fmt.Printf("✅ created client %d\n   uuid: %s\n   sub token: %s\n", c.ID, uid, token)
 	return 0
+}
+
+// pickInboundForNodeRef turns `-node auto|NAME|ID` into the inbound that
+// should host the new client. "auto" = the least-loaded enabled inbound whose
+// node is not down; a name/id = that node's first enabled inbound.
+func pickInboundForNodeRef(st *store.Store, ref string) (*store.Inbound, error) {
+	if ref == "auto" {
+		in, err := st.LeastLoadedInbound()
+		if err != nil {
+			return nil, fmt.Errorf("no eligible inbound (none enabled, or every node down)")
+		}
+		return in, nil
+	}
+	nodeID, err := resolveNodeID(st, ref)
+	if err != nil {
+		return nil, err
+	}
+	in, err := st.FirstEnabledInboundOnNode(nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("node %s has no enabled inbound", ref)
+	}
+	return in, nil
 }
 
 func userList(args []string) int {
