@@ -75,6 +75,7 @@
 | نگهبانِ پورت / TLS / صحتِ لینک | ✅ `hami guard` — تعمیر فقط ری‌استارتِ همان مشخصات |
 | پینِ نسخهٔ هسته و بازگشتِ ارتقا | ✅ `hami pin` / `hami upgrade` |
 | بک‌آپ / بازیابی یک‌دستوری | ✅ `hami backup` / `hami restore` |
+| گزارشِ رویدادها (audit log) | ✅ `hami audit` — ثبت از guard / canary / backup / restore / upgrade |
 | رابطِ وب، API عمومی، بات تلگرام، چندسروره، مهاجرت | 📋 برنامه‌ریزی‌شده |
 
 نقشهٔ کامل: [docs/ROADMAP.md](docs/ROADMAP.md) · طراحی: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)

@@ -38,6 +38,8 @@ func main() {
 		os.Exit(backupCmd(os.Args[2:]))
 	case "restore":
 		os.Exit(restoreCmd(os.Args[2:]))
+	case "audit":
+		os.Exit(auditCmd(os.Args[2:]))
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -48,7 +50,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage:\n  hami gen -spec inbounds.json -out config.json\n  hami canary -spec inbounds.json [-xray /path/to/xray]\n  hami guard -spec inbounds.json [-dial 127.0.0.1] [-db panel.db] [-repair -xray /path/to/xray -config config.json]\n  hami pin [-dir /var/lib/hami]\n  hami upgrade -dir /var/lib/hami -bin ./xray -version 26.3.27\n  hami backup -db panel.db -out backup.tar.gz [-xray-dir /var/lib/hami]\n  hami restore -in backup.tar.gz -db panel.db [-xray-dir /var/lib/hami]\n")
+	fmt.Fprintf(os.Stderr, "usage:\n  hami gen -spec inbounds.json -out config.json\n  hami canary -spec inbounds.json [-xray /path/to/xray]\n  hami guard -spec inbounds.json [-dial 127.0.0.1] [-db panel.db] [-repair -xray /path/to/xray -config config.json]\n  hami pin [-dir /var/lib/hami]\n  hami upgrade -dir /var/lib/hami -bin ./xray -version 26.3.27\n  hami backup -db panel.db -out backup.tar.gz [-xray-dir /var/lib/hami]\n  hami restore -in backup.tar.gz -db panel.db [-xray-dir /var/lib/hami]\n  hami audit -db panel.db [-tail 50] [-level warn]\n")
 }
 
 func gen(args []string) int {
@@ -102,6 +104,7 @@ func canary(args []string) int {
 	fs := flag.NewFlagSet("canary", flag.ContinueOnError)
 	specPath := fs.String("spec", "", "inbound spec JSON")
 	xrayBin := fs.String("xray", os.Getenv("XRAY_BIN"), "path to the xray binary")
+	dbPath := fs.String("db", "", "optional database for the audit log")
 	fs.SetOutput(os.Stderr)
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -135,10 +138,12 @@ func canary(args []string) int {
 		rep, err := (xray.Canary{Bin: *xrayBin, Endpoint: ep}).Run(ctx)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "FAIL %s\n%v\n%s\n", ep.Inbound.Remark, err, rep.Detail)
+			logEvent(*dbPath, "error", "canary", "FAIL "+ep.Inbound.Remark, err.Error())
 			failed = true
 			continue
 		}
 		fmt.Printf("OK %s\n%s\n", ep.Inbound.Remark, rep.Link)
+		logEvent(*dbPath, "info", "canary", "OK "+ep.Inbound.Remark, rep.Link)
 	}
 	if failed {
 		return 1
@@ -268,6 +273,7 @@ func upgradeCmd(args []string) int {
 	dir := fs.String("dir", "", "directory that holds the core")
 	binPath := fs.String("bin", "", "candidate xray binary")
 	version := fs.String("version", "", "version string the candidate must print")
+	dbPath := fs.String("db", "", "optional database for the audit log")
 	fs.SetOutput(os.Stderr)
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -297,14 +303,34 @@ func upgradeCmd(args []string) int {
 		} else {
 			fmt.Fprintf(os.Stderr, "upgrade: %v\n", err)
 		}
+		logEvent(*dbPath, "error", "upgrade", "upgrade to "+*version+" failed", err.Error())
 		return 1
 	}
 	fmt.Printf("installed %s\n", *version)
+	logEvent(*dbPath, "info", "upgrade", "installed "+*version, "")
 	return 0
 }
 
 func bytesContains(b, sub []byte) bool {
 	return len(sub) > 0 && len(b) >= len(sub) && indexBytes(b, sub) >= 0
+}
+
+// logEvent records an action in the shared audit log. It never fails the
+// command itself: the action already happened, the log is best-effort —
+// like guard, which also ignores logging errors.
+func logEvent(dbPath, level, actor, message, meta string) {
+	if dbPath == "" {
+		return
+	}
+	st, err := store.Open(dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "audit: %v\n", err)
+		return
+	}
+	defer st.Close()
+	if err := st.AddEvent(level, actor, message, meta); err != nil {
+		fmt.Fprintf(os.Stderr, "audit: %v\n", err)
+	}
 }
 
 func indexBytes(b, sub []byte) int {
@@ -341,6 +367,7 @@ func backupCmd(args []string) int {
 		return 1
 	}
 	fmt.Printf("backup %s\n", *outPath)
+	logEvent(*dbPath, "info", "backup", "backup "+*outPath, "")
 	return 0
 }
 
@@ -362,5 +389,6 @@ func restoreCmd(args []string) int {
 		return 1
 	}
 	fmt.Printf("restored %s -> %s\n", *inPath, *dbPath)
+	logEvent(*dbPath, "info", "restore", "restored from "+*inPath, "")
 	return 0
 }
