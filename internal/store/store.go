@@ -115,6 +115,13 @@ var migrations = []string{
 		cert_file   TEXT NOT NULL DEFAULT '',
 		key_file    TEXT NOT NULL DEFAULT ''
 	);`,
+	// Stage 2: one unguessable subscription token per client. Empty string
+	// means "no subscription was issued yet".
+	`ALTER TABLE clients ADD COLUMN sub_token TEXT NOT NULL DEFAULT '';`,
+	// Tokens must be unique — but many rows may share the empty default,
+	// so the index covers only real tokens.
+	`CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_sub_token
+		ON clients(sub_token) WHERE sub_token <> '';`,
 }
 
 func (s *Store) migrate() error {
@@ -179,6 +186,7 @@ type Client struct {
 	ExpireAt   *time.Time
 	IPLimit    int
 	SpeedLimit int64
+	SubToken   string
 
 	CreatedAt time.Time
 }
@@ -300,11 +308,11 @@ func (s *Store) CreateClient(c *Client) error {
 	}
 	res, err := s.db.Exec(`INSERT INTO clients (inbound_id, uuid, password, method,
 		ss_password, email, enable, total_bytes, up_bytes, down_bytes, expire_at,
-		ip_limit, speed_limit, created_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		ip_limit, speed_limit, sub_token, created_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		c.InboundID, c.UUID, c.Password, c.Method, c.SSPassword, c.Email,
 		boolInt(c.Enable), c.TotalBytes, c.UpBytes, c.DownBytes, expire,
-		c.IPLimit, c.SpeedLimit, c.CreatedAt.Format(time.RFC3339))
+		c.IPLimit, c.SpeedLimit, c.SubToken, c.CreatedAt.Format(time.RFC3339))
 	if err != nil {
 		return err
 	}
@@ -315,13 +323,13 @@ func (s *Store) CreateClient(c *Client) error {
 func (s *Store) GetClient(id int64) (*Client, error) {
 	return scanClient(s.db.QueryRow(`SELECT id, inbound_id, uuid, password, method,
 		ss_password, email, enable, total_bytes, up_bytes, down_bytes, expire_at,
-		ip_limit, speed_limit, created_at FROM clients WHERE id = ?`, id))
+		ip_limit, speed_limit, sub_token, created_at FROM clients WHERE id = ?`, id))
 }
 
 func (s *Store) ListClientsOf(inboundID int64) ([]Client, error) {
 	rows, err := s.db.Query(`SELECT id, inbound_id, uuid, password, method,
 		ss_password, email, enable, total_bytes, up_bytes, down_bytes, expire_at,
-		ip_limit, speed_limit, created_at FROM clients WHERE inbound_id = ? ORDER BY id`,
+		ip_limit, speed_limit, sub_token, created_at FROM clients WHERE inbound_id = ? ORDER BY id`,
 		inboundID)
 	if err != nil {
 		return nil, err
@@ -375,7 +383,7 @@ func scanClient(row scanner) (*Client, error) {
 	)
 	err := row.Scan(&c.ID, &c.InboundID, &c.UUID, &c.Password, &c.Method,
 		&c.SSPassword, &c.Email, &enable, &c.TotalBytes, &c.UpBytes, &c.DownBytes,
-		&expire, &c.IPLimit, &c.SpeedLimit, &ts)
+		&expire, &c.IPLimit, &c.SpeedLimit, &c.SubToken, &ts)
 	if err != nil {
 		return nil, err
 	}
