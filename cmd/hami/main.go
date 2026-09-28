@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"sync"
 	"time"
 
@@ -28,6 +29,10 @@ func main() {
 		os.Exit(canary(os.Args[2:]))
 	case "guard":
 		os.Exit(guardCmd(os.Args[2:]))
+	case "pin":
+		os.Exit(pinCmd(os.Args[2:]))
+	case "upgrade":
+		os.Exit(upgradeCmd(os.Args[2:]))
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -38,7 +43,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage:\n  hami gen -spec inbounds.json -out config.json\n  hami canary -spec inbounds.json [-xray /path/to/xray]\n  hami guard -spec inbounds.json [-dial 127.0.0.1] [-db panel.db] [-repair -xray /path/to/xray -config config.json]\n")
+	fmt.Fprintf(os.Stderr, "usage:\n  hami gen -spec inbounds.json -out config.json\n  hami canary -spec inbounds.json [-xray /path/to/xray]\n  hami guard -spec inbounds.json [-dial 127.0.0.1] [-db panel.db] [-repair -xray /path/to/xray -config config.json]\n  hami pin [-dir /var/lib/hami]\n  hami upgrade -dir /var/lib/hami -bin ./xray -version 26.3.27\n")
 }
 
 func gen(args []string) int {
@@ -231,4 +236,84 @@ func guardCmd(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+func pinCmd(args []string) int {
+	fs := flag.NewFlagSet("pin", flag.ContinueOnError)
+	dir := fs.String("dir", "", "directory with the installed core")
+	fs.SetOutput(os.Stderr)
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	fmt.Printf("tested %s\n", xray.PinnedVersion)
+	if *dir == "" {
+		return 0
+	}
+	pin, err := xray.ReadPin(*dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "installed pin: %v\n", err)
+		return 1
+	}
+	fmt.Printf("installed %s %s\n", pin.Version, pin.SHA256)
+	return 0
+}
+
+func upgradeCmd(args []string) int {
+	fs := flag.NewFlagSet("upgrade", flag.ContinueOnError)
+	dir := fs.String("dir", "", "directory that holds the core")
+	binPath := fs.String("bin", "", "candidate xray binary")
+	version := fs.String("version", "", "version string the candidate must print")
+	fs.SetOutput(os.Stderr)
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *dir == "" || *binPath == "" || *version == "" {
+		usage()
+		return 2
+	}
+	candidate, err := os.ReadFile(*binPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "read bin: %v\n", err)
+		return 1
+	}
+	rolled, err := xray.Stage(*dir, candidate, *version, func(path string) error {
+		out, runErr := exec.Command(path, "version").CombinedOutput()
+		if runErr != nil {
+			return fmt.Errorf("%w: %s", runErr, out)
+		}
+		if !bytesContains(out, []byte(*version)) {
+			return fmt.Errorf("binary did not report %s", *version)
+		}
+		return nil
+	})
+	if err != nil {
+		if rolled {
+			fmt.Fprintf(os.Stderr, "ROLLED BACK\n%v\n", err)
+		} else {
+			fmt.Fprintf(os.Stderr, "upgrade: %v\n", err)
+		}
+		return 1
+	}
+	fmt.Printf("installed %s\n", *version)
+	return 0
+}
+
+func bytesContains(b, sub []byte) bool {
+	return len(sub) > 0 && len(b) >= len(sub) && indexBytes(b, sub) >= 0
+}
+
+func indexBytes(b, sub []byte) int {
+	for i := 0; i+len(sub) <= len(b); i++ {
+		ok := true
+		for j := range sub {
+			if b[i+j] != sub[j] {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return i
+		}
+	}
+	return -1
 }
