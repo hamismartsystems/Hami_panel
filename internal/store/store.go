@@ -122,6 +122,8 @@ var migrations = []string{
 	// so the index covers only real tokens.
 	`CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_sub_token
 		ON clients(sub_token) WHERE sub_token <> '';`,
+	// Stage 3: every inbound lives on exactly one node (0 = this server).
+	`ALTER TABLE inbounds ADD COLUMN node_id INTEGER NOT NULL DEFAULT 0;`,
 }
 
 func (s *Store) migrate() error {
@@ -145,6 +147,7 @@ func (s *Store) migrate() error {
 // Inbound is one listening endpoint of the core.
 type Inbound struct {
 	ID       int64
+	NodeID   int64
 	Remark   string
 	Protocol string
 	Port     int
@@ -216,11 +219,11 @@ func (s *Store) CreateInbound(in *Inbound) error {
 	in.CreatedAt = time.Now().UTC()
 	in.Enable = true
 	res, err := s.db.Exec(
-		`INSERT INTO inbounds (remark, protocol, port, host, transport, security,
+		`INSERT INTO inbounds (node_id, remark, protocol, port, host, transport, security,
 		 sni, public_key, short_id, spider_x, fingerprint, path, xhttp_mode,
 		 header_type, flow, enable, created_at)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		in.Remark, in.Protocol, in.Port, in.Host, in.Transport, orNone(in.Security),
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		in.NodeID, in.Remark, in.Protocol, in.Port, in.Host, in.Transport, orNone(in.Security),
 		in.SNI, in.PublicKey, in.ShortID, in.SpiderX, in.Fingerprint,
 		in.Path, orAuto(in.XHTTPMode), orNone(in.HeaderType), in.Flow,
 		boolInt(in.Enable), in.CreatedAt.Format(time.RFC3339))
@@ -232,14 +235,14 @@ func (s *Store) CreateInbound(in *Inbound) error {
 }
 
 func (s *Store) GetInbound(id int64) (*Inbound, error) {
-	row := s.db.QueryRow(`SELECT id, remark, protocol, port, host, transport, security,
+	row := s.db.QueryRow(`SELECT id, node_id, remark, protocol, port, host, transport, security,
 		sni, public_key, short_id, spider_x, fingerprint, path, xhttp_mode,
 		header_type, flow, enable, created_at FROM inbounds WHERE id = ?`, id)
 	return scanInbound(row)
 }
 
 func (s *Store) ListInbounds() ([]Inbound, error) {
-	rows, err := s.db.Query(`SELECT id, remark, protocol, port, host, transport, security,
+	rows, err := s.db.Query(`SELECT id, node_id, remark, protocol, port, host, transport, security,
 		sni, public_key, short_id, spider_x, fingerprint, path, xhttp_mode,
 		header_type, flow, enable, created_at FROM inbounds ORDER BY id`)
 	if err != nil {
@@ -279,7 +282,7 @@ func scanInbound(row scanner) (*Inbound, error) {
 		enable int
 		ts     string
 	)
-	err := row.Scan(&in.ID, &in.Remark, &in.Protocol, &in.Port, &in.Host,
+	err := row.Scan(&in.ID, &in.NodeID, &in.Remark, &in.Protocol, &in.Port, &in.Host,
 		&in.Transport, &in.Security, &in.SNI, &in.PublicKey, &in.ShortID,
 		&in.SpiderX, &in.Fingerprint, &in.Path, &in.XHTTPMode, &in.HeaderType,
 		&in.Flow, &enable, &ts)

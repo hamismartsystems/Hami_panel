@@ -48,6 +48,10 @@ func main() {
 		os.Exit(subCmd(os.Args[2:]))
 	case "notice":
 		os.Exit(noticeCmd(os.Args[2:]))
+	case "node":
+		os.Exit(nodeCmd(os.Args[2:]))
+	case "agent":
+		os.Exit(agentCmd(os.Args[2:]))
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -58,7 +62,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage:\n  hami gen -spec inbounds.json -out config.json\n  hami canary -spec inbounds.json [-xray /path/to/xray]\n  hami guard -spec inbounds.json [-dial 127.0.0.1] [-db panel.db] [-repair -xray /path/to/xray -config config.json]\n  hami pin [-dir /var/lib/hami]\n  hami upgrade -dir /var/lib/hami -bin ./xray -version 26.3.27\n  hami backup -db panel.db -out backup.tar.gz [-xray-dir /var/lib/hami]\n  hami restore -in backup.tar.gz -db panel.db [-xray-dir /var/lib/hami]\n  hami audit -db panel.db [-tail 50] [-level warn]\n  hami user ... (hami user with no args prints user usage)\n  hami sub serve -db panel.db [-addr :8080] [-base-url URL]\n  hami notice -db panel.db [-days 3] [-ratio 0.8] [-telegram TOKEN:CHATID]\n")
+	fmt.Fprintf(os.Stderr, "usage:\n  hami gen -spec inbounds.json -out config.json\n  hami canary -spec inbounds.json [-xray /path/to/xray]\n  hami guard -spec inbounds.json [-dial 127.0.0.1] [-db panel.db] [-repair -xray /path/to/xray -config config.json]\n  hami pin [-dir /var/lib/hami]\n  hami upgrade -dir /var/lib/hami -bin ./xray -version 26.3.27\n  hami backup -db panel.db -out backup.tar.gz [-xray-dir /var/lib/hami]\n  hami restore -in backup.tar.gz -db panel.db [-xray-dir /var/lib/hami]\n  hami audit -db panel.db [-tail 50] [-level warn]\n  hami user ... (hami user with no args prints user usage)\n  hami sub serve -db panel.db [-addr :8080] [-base-url URL]\n  hami notice -db panel.db [-days 3] [-ratio 0.8] [-telegram TOKEN:CHATID]\n  hami node add|list|check|remove -db panel.db\n  hami agent run -listen ADDR -name NAME -api-key KEY\n")
 }
 
 func gen(args []string) int {
