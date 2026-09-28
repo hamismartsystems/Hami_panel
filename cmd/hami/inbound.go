@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/hamismartsystems/hami_panel/internal/store"
 )
@@ -56,6 +57,7 @@ func inboundAdd(args []string) int {
 	protocol := fs.String("protocol", "", "")
 	port := fs.Int("port", 0, "")
 	host := fs.String("host", "", "")
+	nodeRef := fs.String("node", "", "attach to node (name or id)")
 	transport := fs.String("transport", "tcp", "")
 	security := fs.String("security", "none", "")
 	sni := fs.String("sni", "", "")
@@ -82,7 +84,13 @@ func inboundAdd(args []string) int {
 	}
 	defer st.Close()
 
+	nodeID, err := resolveNodeID(st, *nodeRef)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "node: %v\n", err)
+		return 1
+	}
 	in := &store.Inbound{
+		NodeID: nodeID,
 		Remark: *remark, Protocol: *protocol, Port: *port, Host: *host,
 		Transport: *transport, Security: *security, SNI: *sni,
 		PublicKey: *pbk, ShortID: *sid, SpiderX: *spx, Fingerprint: *fp,
@@ -105,6 +113,25 @@ func inboundAdd(args []string) int {
 	logEvent(*dbPath, "info", "inbound", fmt.Sprintf("added %s (%s %d)", *remark, *protocol, *port), "")
 	fmt.Printf("✅ created inbound %d (%s %s:%d %s/%s)\n", in.ID, *remark, *host, *port, *transport, *security)
 	return 0
+}
+
+// resolveNodeID accepts "-node fr-1", "-node 3", or "" (local, id 0).
+func resolveNodeID(st *store.Store, ref string) (int64, error) {
+	if ref == "" {
+		return 0, nil
+	}
+	if n, err := st.GetNodeByName(ref); err == nil {
+		return n.ID, nil
+	}
+	id, err := strconv.ParseInt(ref, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("no node named %q (use `hami node add` first, or pass a numeric id)", ref)
+	}
+	n, err := st.GetNode(id)
+	if err != nil {
+		return 0, fmt.Errorf("no node with id %d", id)
+	}
+	return n.ID, nil
 }
 
 func inboundToggle(verb string, args []string) int {

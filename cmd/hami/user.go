@@ -481,9 +481,22 @@ func userInbounds(args []string) int {
 		fmt.Fprintf(os.Stderr, "list: %v\n", err)
 		return 1
 	}
-	fmt.Printf("%-4s %-20s %-8s %-6s %-14s %-8s %s\n", "ID", "REMARK", "PROTO", "PORT", "SECURITY", "ENABLED", "HOST")
+	nodeNames := map[int64]string{}
+	if nodes, err := st.ListNodes(); err == nil {
+		for _, n := range nodes {
+			nodeNames[n.ID] = n.Name
+		}
+	}
+	fmt.Printf("%-4s %-20s %-8s %-6s %-14s %-8s %-12s %s\n", "ID", "REMARK", "PROTO", "PORT", "SECURITY", "ENABLED", "NODE", "HOST")
 	for _, in := range ins {
-		fmt.Printf("%-4d %-20s %-8s %-6d %-14s %-8v %s\n", in.ID, in.Remark, in.Protocol, in.Port, in.Security, in.Enable, in.Host)
+		nodeName := "-"
+		if in.NodeID != 0 {
+			nodeName = nodeNames[in.NodeID]
+			if nodeName == "" {
+				nodeName = fmt.Sprintf("#%d", in.NodeID)
+			}
+		}
+		fmt.Printf("%-4d %-20s %-8s %-6d %-14s %-8v %-12s %s\n", in.ID, in.Remark, in.Protocol, in.Port, in.Security, in.Enable, nodeName, in.Host)
 	}
 	return 0
 }

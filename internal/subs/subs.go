@@ -84,6 +84,12 @@ func LinkOf(e Entry) (string, error) {
 // Entries resolves the enabled inbounds of a client. Today a client lives on
 // exactly one inbound, so this returns 0 or 1 entries; the signature already
 // supports multi-inbound subscriptions.
+//
+// Node gating (stage 3): if the inbound runs on a node whose last probe
+// failed ("down"), it is dropped from the subscription — clients then keep
+// whatever still works. "unknown" (never probed) and "unstable" (degraded
+// but answering) are still served: a node that has never been checked must
+// not silently break every customer on it.
 func Entries(st *store.Store, c store.Client, now time.Time) ([]Entry, error) {
 	if !ActiveNow(c, now) {
 		return nil, nil
@@ -94,6 +100,15 @@ func Entries(st *store.Store, c store.Client, now time.Time) ([]Entry, error) {
 	}
 	if !in.Enable {
 		return nil, nil
+	}
+	if in.NodeID != 0 {
+		node, err := st.GetNode(in.NodeID)
+		if err != nil {
+			return nil, fmt.Errorf("inbound %d node %d: %w", in.ID, in.NodeID, err)
+		}
+		if node.Status == store.NodeDown {
+			return nil, nil
+		}
 	}
 	return []Entry{{Inbound: *in, Client: c}}, nil
 }

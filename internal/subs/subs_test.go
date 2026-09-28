@@ -233,6 +233,65 @@ func TestSingboxSkipsXhttp(t *testing.T) {
 	}
 }
 
+func TestEntriesNodeHealthGating(t *testing.T) {
+	st, err := store.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	node := &store.Node{Name: "nl-1", Address: "10.0.0.9:9100"}
+	if err := st.CreateNode(node); err != nil {
+		t.Fatal(err)
+	}
+	in := &store.Inbound{NodeID: node.ID, Remark: "nl-in", Protocol: "vless", Port: 443,
+		Host: "nl.x", Transport: "tcp", Security: "reality", SNI: "cdn.x", PublicKey: "pk"}
+	if err := st.CreateInbound(in); err != nil {
+		t.Fatal(err)
+	}
+	c := &store.Client{InboundID: in.ID, UUID: "u-1", Enable: true}
+	if err := st.CreateClient(c); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+
+	// never probed → "unknown" must still be served
+	if ents, _ := Entries(st, *c, now); len(ents) != 1 {
+		t.Fatalf("unknown node must be served: %v", ents)
+	}
+	// healthy → served
+	_ = st.MarkNodeStatus(node.ID, store.NodeHealthy, now)
+	if ents, _ := Entries(st, *c, now); len(ents) != 1 {
+		t.Fatalf("healthy node must be served: %v", ents)
+	}
+	// unstable → still served (degrade≠dead)
+	_ = st.MarkNodeStatus(node.ID, store.NodeUnstable, now)
+	if ents, _ := Entries(st, *c, now); len(ents) != 1 {
+		t.Fatalf("unstable node must stay in the sub: %v", ents)
+	}
+	// down → dropped
+	_ = st.MarkNodeStatus(node.ID, store.NodeDown, now)
+	if ents, _ := Entries(st, *c, now); len(ents) != 0 {
+		t.Fatalf("down node must be dropped from the sub: %v", ents)
+	}
+	// back up → served again (self-healing sub)
+	_ = st.MarkNodeStatus(node.ID, store.NodeHealthy, now)
+	if ents, _ := Entries(st, *c, now); len(ents) != 1 {
+		t.Fatalf("recovered node must return to the sub: %v", ents)
+	}
+	// local inbounds (node 0) are never node-gated
+	local := &store.Inbound{Remark: "local", Protocol: "vless", Port: 8443,
+		Host: "h.x", Transport: "tcp", Security: "reality", SNI: "s.x", PublicKey: "pk"}
+	if err := st.CreateInbound(local); err != nil {
+		t.Fatal(err)
+	}
+	lc := &store.Client{InboundID: local.ID, UUID: "u-2", Enable: true}
+	_ = st.CreateClient(lc)
+	if ents, _ := Entries(st, *lc, now); len(ents) != 1 {
+		t.Fatalf("local inbound must bypass node gating: %v", ents)
+	}
+}
+
 func TestEntriesRespectGates(t *testing.T) {
 	st, err := store.Open(":memory:")
 	if err != nil {
