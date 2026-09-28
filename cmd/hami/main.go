@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hamismartsystems/hami_panel/internal/backup"
 	"github.com/hamismartsystems/hami_panel/internal/guard"
 	"github.com/hamismartsystems/hami_panel/internal/store"
 	"github.com/hamismartsystems/hami_panel/internal/xray"
@@ -33,6 +34,10 @@ func main() {
 		os.Exit(pinCmd(os.Args[2:]))
 	case "upgrade":
 		os.Exit(upgradeCmd(os.Args[2:]))
+	case "backup":
+		os.Exit(backupCmd(os.Args[2:]))
+	case "restore":
+		os.Exit(restoreCmd(os.Args[2:]))
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -43,7 +48,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage:\n  hami gen -spec inbounds.json -out config.json\n  hami canary -spec inbounds.json [-xray /path/to/xray]\n  hami guard -spec inbounds.json [-dial 127.0.0.1] [-db panel.db] [-repair -xray /path/to/xray -config config.json]\n  hami pin [-dir /var/lib/hami]\n  hami upgrade -dir /var/lib/hami -bin ./xray -version 26.3.27\n")
+	fmt.Fprintf(os.Stderr, "usage:\n  hami gen -spec inbounds.json -out config.json\n  hami canary -spec inbounds.json [-xray /path/to/xray]\n  hami guard -spec inbounds.json [-dial 127.0.0.1] [-db panel.db] [-repair -xray /path/to/xray -config config.json]\n  hami pin [-dir /var/lib/hami]\n  hami upgrade -dir /var/lib/hami -bin ./xray -version 26.3.27\n  hami backup -db panel.db -out backup.tar.gz [-xray-dir /var/lib/hami]\n  hami restore -in backup.tar.gz -db panel.db [-xray-dir /var/lib/hami]\n")
 }
 
 func gen(args []string) int {
@@ -316,4 +321,46 @@ func indexBytes(b, sub []byte) int {
 		}
 	}
 	return -1
+}
+
+func backupCmd(args []string) int {
+	fs := flag.NewFlagSet("backup", flag.ContinueOnError)
+	dbPath := fs.String("db", "", "panel database")
+	outPath := fs.String("out", "", "tar.gz to write")
+	xrayDir := fs.String("xray-dir", "", "directory with PIN")
+	fs.SetOutput(os.Stderr)
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *dbPath == "" || *outPath == "" {
+		usage()
+		return 2
+	}
+	if err := backup.Backup(*dbPath, *xrayDir, *outPath); err != nil {
+		fmt.Fprintf(os.Stderr, "backup: %v\n", err)
+		return 1
+	}
+	fmt.Printf("backup %s\n", *outPath)
+	return 0
+}
+
+func restoreCmd(args []string) int {
+	fs := flag.NewFlagSet("restore", flag.ContinueOnError)
+	inPath := fs.String("in", "", "tar.gz to read")
+	dbPath := fs.String("db", "", "panel database to write")
+	xrayDir := fs.String("xray-dir", "", "directory with PIN")
+	fs.SetOutput(os.Stderr)
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *inPath == "" || *dbPath == "" {
+		usage()
+		return 2
+	}
+	if err := backup.Restore(*inPath, *dbPath, *xrayDir); err != nil {
+		fmt.Fprintf(os.Stderr, "restore: %v\n", err)
+		return 1
+	}
+	fmt.Printf("restored %s -> %s\n", *inPath, *dbPath)
+	return 0
 }
