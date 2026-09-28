@@ -272,6 +272,12 @@ func (s *Store) SetInboundEnabled(id int64, enable bool) error {
 	return err
 }
 
+func (s *Store) UpdateInboundReality(id int64, publicKey, shortID, sni, fingerprint, spiderX string) error {
+	_, err := s.db.Exec(`UPDATE inbounds SET public_key = ?, short_id = ?, sni = ?, fingerprint = ?, spider_x = ? WHERE id = ?`,
+		publicKey, shortID, sni, fingerprint, spiderX, id)
+	return err
+}
+
 type scanner interface {
 	Scan(dest ...interface{}) error
 }

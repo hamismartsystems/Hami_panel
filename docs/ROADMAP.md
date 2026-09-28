@@ -40,9 +40,9 @@
 
 ## مرحلهٔ ۴ — پروتکل‌های نو و ضدِ فیلترینگ
 - [ ] sing-box به‌عنوان هستهٔ دوم (Hysteria2، TUIC، AnyTLS)
-- [ ] قالب‌های آماده برای VLESS+Reality، XHTTP، HTTPUpgrade، gRPC
-- [ ] بررسیِ خودکارِ سلامتِ مقصدِ Reality (dest/SNI) و اثرانگشتِ uTLS
-- [ ] چرخشِ ShortID و کلید
+- [x] قالب‌های آماده برای VLESS+Reality، XHTTP، HTTPUpgrade، gRPC (`hami template list` / `apply` — ۷ قالب: tcp/xhttp/grpc/httpupgrade + tls variants)
+- [x] بررسیِ خودکارِ سلامتِ مقصدِ Reality (dest/SNI) و اثرانگشتِ uTLS (`hami reality check -dest HOST:PORT -sni SNI` — TLS handshake + VerifyHostname، تست با cert خودامضا)
+- [x] چرخشِ ShortID و کلید (`hami reality rotate -db panel.db -id ID [-new-sid] [-new-key]` + `hami reality keygen` — X25519 با ecdh، ShortID هگز تصادفی)
 
 ## مرحلهٔ ۵ — فروش و خودکارسازی
 - [ ] بات تلگرام (ساخت کاربر، تمدید، وضعیت)
