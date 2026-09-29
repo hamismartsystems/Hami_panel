@@ -74,6 +74,10 @@ func inboundAdd(args []string) int {
 	listen := fs.String("listen", "0.0.0.0", "")
 	certFile := fs.String("cert-file", "", "")
 	keyFile := fs.String("key-file", "", "")
+	obfsType := fs.String("obfs-type", "", "hysteria2 obfs type (salamander)")
+	obfsPassword := fs.String("obfs-password", "", "hysteria2 obfs password")
+	alpn := fs.String("alpn", "", "alpn, e.g. h3 for tuic/hysteria2")
+	cc := fs.String("cc", "", "congestion control for tuic: bbr/cubic/new_reno")
 	fs.SetOutput(os.Stderr)
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -95,6 +99,7 @@ func inboundAdd(args []string) int {
 		Transport: *transport, Security: *security, SNI: *sni,
 		PublicKey: *pbk, ShortID: *sid, SpiderX: *spx, Fingerprint: *fp,
 		Path: *path, XHTTPMode: *xhttpMode, HeaderType: *headerType, Flow: *flow,
+		ObfsType: *obfsType, ObfsPassword: *obfsPassword, Alpn: *alpn, CongestionControl: *cc,
 	}
 	if err := st.CreateInbound(in); err != nil {
 		fmt.Fprintf(os.Stderr, "create: %v\n", err)

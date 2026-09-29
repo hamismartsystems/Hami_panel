@@ -39,8 +39,8 @@
 - [x] توزیعِ کاربر روی چند گره — `user create -node auto` کم‌بارترین اینباندِ روی گره‌های سالم/نامشخص را انتخاب می‌کند (گره‌ی down همیشه کنار گذاشته می‌شود؛ برابری → کمترین شناسه، قطعی) و `user create -node NAME` توزیعِ دستی
 
 ## مرحلهٔ ۴ — پروتکل‌های نو و ضدِ فیلترینگ
-- [ ] sing-box به‌عنوان هستهٔ دوم (Hysteria2، TUIC، AnyTLS)
-- [x] قالب‌های آماده برای VLESS+Reality، XHTTP، HTTPUpgrade، gRPC (`hami template list` / `apply` — ۷ قالب: tcp/xhttp/grpc/httpupgrade + tls variants)
+- [x] sing-box به‌عنوان هستهٔ دوم (Hysteria2، TUIC، AnyTLS) — `internal/singbox` با Build/Links، `hami gen -core singbox`، لینک‌های `hysteria2://` / `tuic://` / `anytls://`، ساب‌لینک چندقالبه (v2ray/Clash/sing-box) برای هر سه
+- [x] قالب‌های آماده برای VLESS+Reality، XHTTP، HTTPUpgrade، gRPC + sing-box (`hami template list` / `apply` — ۱۱ قالب: ۷ تا VLESS + ۴ تا sing-box: hysteria2-tls/tuic-tls/anytls-tls/anytls-reality)
 - [x] بررسیِ خودکارِ سلامتِ مقصدِ Reality (dest/SNI) و اثرانگشتِ uTLS (`hami reality check -dest HOST:PORT -sni SNI` — TLS handshake + VerifyHostname، تست با cert خودامضا)
 - [x] چرخشِ ShortID و کلید (`hami reality rotate -db panel.db -id ID [-new-sid] [-new-key]` + `hami reality keygen` — X25519 با ecdh، ShortID هگز تصادفی)
 

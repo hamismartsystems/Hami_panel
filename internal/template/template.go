@@ -14,6 +14,12 @@ type Template struct {
 	Path        string
 	XHTTPMode   string
 	HeaderType  string
+
+	// sing-box
+	ObfsType          string
+	ObfsPassword      string
+	Alpn              string
+	CongestionControl string
 }
 
 // All returns the built-in templates.
@@ -80,6 +86,38 @@ func All() []Template {
 			Protocol:    "vless",
 			Transport:   "tcp",
 			Security:    "tls",
+			Fingerprint: "chrome",
+		},
+		{
+			Name:        "hysteria2-tls",
+			Description: "Hysteria2 + TLS — QUIC-based, fast on lossy networks (sing-box)",
+			Protocol:    "hysteria2",
+			Transport:   "udp",
+			Security:    "tls",
+			Alpn:        "h3",
+		},
+		{
+			Name:              "tuic-tls",
+			Description:       "TUIC v5 + TLS — QUIC 0-RTT, multiplexed (sing-box)",
+			Protocol:          "tuic",
+			Transport:         "quic",
+			Security:          "tls",
+			Alpn:              "h3",
+			CongestionControl: "bbr",
+		},
+		{
+			Name:        "anytls-tls",
+			Description: "AnyTLS + TLS — mitigates TLS-in-TLS fingerprint (sing-box)",
+			Protocol:    "anytls",
+			Transport:   "tcp",
+			Security:    "tls",
+		},
+		{
+			Name:        "anytls-reality",
+			Description: "AnyTLS + Reality — AnyTLS over Reality (sing-box 1.12+)",
+			Protocol:    "anytls",
+			Transport:   "tcp",
+			Security:    "reality",
 			Fingerprint: "chrome",
 		},
 	}

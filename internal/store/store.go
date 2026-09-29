@@ -124,6 +124,11 @@ var migrations = []string{
 		ON clients(sub_token) WHERE sub_token <> '';`,
 	// Stage 3: every inbound lives on exactly one node (0 = this server).
 	`ALTER TABLE inbounds ADD COLUMN node_id INTEGER NOT NULL DEFAULT 0;`,
+	// Stage 4: sing-box fields for Hysteria2/TUIC/AnyTLS
+	`ALTER TABLE inbounds ADD COLUMN obfs_type TEXT NOT NULL DEFAULT '';`,
+	`ALTER TABLE inbounds ADD COLUMN obfs_password TEXT NOT NULL DEFAULT '';`,
+	`ALTER TABLE inbounds ADD COLUMN alpn TEXT NOT NULL DEFAULT '';`,
+	`ALTER TABLE inbounds ADD COLUMN congestion_control TEXT NOT NULL DEFAULT '';`,
 }
 
 func (s *Store) migrate() error {
@@ -166,6 +171,12 @@ type Inbound struct {
 	XHTTPMode  string
 	HeaderType string
 	Flow       string
+
+	// sing-box: Hysteria2/TUIC/AnyTLS
+	ObfsType          string
+	ObfsPassword      string
+	Alpn              string
+	CongestionControl string
 
 	Enable    bool
 	CreatedAt time.Time
@@ -221,11 +232,12 @@ func (s *Store) CreateInbound(in *Inbound) error {
 	res, err := s.db.Exec(
 		`INSERT INTO inbounds (node_id, remark, protocol, port, host, transport, security,
 		 sni, public_key, short_id, spider_x, fingerprint, path, xhttp_mode,
-		 header_type, flow, enable, created_at)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		 header_type, flow, obfs_type, obfs_password, alpn, congestion_control, enable, created_at)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		in.NodeID, in.Remark, in.Protocol, in.Port, in.Host, in.Transport, orNone(in.Security),
 		in.SNI, in.PublicKey, in.ShortID, in.SpiderX, in.Fingerprint,
 		in.Path, orAuto(in.XHTTPMode), orNone(in.HeaderType), in.Flow,
+		in.ObfsType, in.ObfsPassword, in.Alpn, in.CongestionControl,
 		boolInt(in.Enable), in.CreatedAt.Format(time.RFC3339))
 	if err != nil {
 		return err
@@ -237,14 +249,14 @@ func (s *Store) CreateInbound(in *Inbound) error {
 func (s *Store) GetInbound(id int64) (*Inbound, error) {
 	row := s.db.QueryRow(`SELECT id, node_id, remark, protocol, port, host, transport, security,
 		sni, public_key, short_id, spider_x, fingerprint, path, xhttp_mode,
-		header_type, flow, enable, created_at FROM inbounds WHERE id = ?`, id)
+		header_type, flow, obfs_type, obfs_password, alpn, congestion_control, enable, created_at FROM inbounds WHERE id = ?`, id)
 	return scanInbound(row)
 }
 
 func (s *Store) ListInbounds() ([]Inbound, error) {
 	rows, err := s.db.Query(`SELECT id, node_id, remark, protocol, port, host, transport, security,
 		sni, public_key, short_id, spider_x, fingerprint, path, xhttp_mode,
-		header_type, flow, enable, created_at FROM inbounds ORDER BY id`)
+		header_type, flow, obfs_type, obfs_password, alpn, congestion_control, enable, created_at FROM inbounds ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +303,7 @@ func scanInbound(row scanner) (*Inbound, error) {
 	err := row.Scan(&in.ID, &in.NodeID, &in.Remark, &in.Protocol, &in.Port, &in.Host,
 		&in.Transport, &in.Security, &in.SNI, &in.PublicKey, &in.ShortID,
 		&in.SpiderX, &in.Fingerprint, &in.Path, &in.XHTTPMode, &in.HeaderType,
-		&in.Flow, &enable, &ts)
+		&in.Flow, &in.ObfsType, &in.ObfsPassword, &in.Alpn, &in.CongestionControl, &enable, &ts)
 	if err != nil {
 		return nil, err
 	}

@@ -42,7 +42,7 @@ const (
 type Inbound struct {
 	ID       int64
 	Remark   string
-	Protocol string // vless, vmess, trojan, shadowsocks
+	Protocol string // vless, vmess, trojan, shadowsocks, hysteria2, tuic, anytls
 	Port     int
 	Host     string // public host or IP for the link
 
@@ -65,6 +65,12 @@ type Inbound struct {
 
 	// per-user
 	Flow string // xtls-rprx-vision
+
+	// sing-box specific (hysteria2, tuic, anytls)
+	ObfsType          string // salamander for hysteria2
+	ObfsPassword      string
+	Alpn              string // h3 for tuic/hysteria2
+	CongestionControl string // bbr, cubic, new_reno for tuic
 }
 
 // Client is the credential of one subscriber on that inbound.
@@ -86,9 +92,17 @@ func (i Inbound) Validate() error {
 		return fmt.Errorf("inbound %d: invalid port %d", i.ID, i.Port)
 	}
 	switch strings.ToLower(i.Protocol) {
-	case "vless", "vmess", "trojan", "shadowsocks":
+	case "vless", "vmess", "trojan", "shadowsocks", "hysteria2", "hy2", "tuic", "anytls":
 	default:
 		return fmt.Errorf("inbound %d: unsupported protocol %q", i.ID, i.Protocol)
+	}
+	// sing-box protocols use TLS and need SNI for the link
+	switch strings.ToLower(i.Protocol) {
+	case "hysteria2", "hy2", "tuic", "anytls":
+		if i.SNI == "" && i.Host == "" {
+			return fmt.Errorf("inbound %d: %s without sni/host", i.ID, i.Protocol)
+		}
+		return nil
 	}
 	if i.Security == Reality {
 		if i.PublicKey == "" {
@@ -122,6 +136,12 @@ func Build(in Inbound, c Client) (string, error) {
 		return trojan(in, c)
 	case "shadowsocks":
 		return shadowsocks(in, c)
+	case "hysteria2", "hy2":
+		return hysteria2(in, c)
+	case "tuic":
+		return tuic(in, c)
+	case "anytls":
+		return anytls(in, c)
 	}
 	return "", fmt.Errorf("unsupported protocol %q", in.Protocol)
 }
@@ -267,6 +287,93 @@ func shadowsocks(in Inbound, c Client) (string, error) {
 		Scheme: "ss",
 		User:   url.User(user),
 		Host:   fmt.Sprintf("%s:%d", hostport(in.Host), in.Port),
+	}
+	return u.String() + "#" + url.QueryEscape(orDefault(in.Remark, "hami")), nil
+}
+
+func hysteria2(in Inbound, c Client) (string, error) {
+	pw := c.Password
+	if pw == "" {
+		pw = c.SSPassword
+	}
+	if pw == "" {
+		pw = c.UUID
+	}
+	if pw == "" {
+		return "", fmt.Errorf("hysteria2 client without password")
+	}
+	q := url.Values{}
+	q.Set("insecure", "0")
+	if in.SNI != "" {
+		q.Set("sni", in.SNI)
+	}
+	if in.ObfsType != "" {
+		q.Set("obfs", in.ObfsType)
+		if in.ObfsPassword != "" {
+			q.Set("obfs-password", in.ObfsPassword)
+		}
+	}
+	if in.Alpn != "" {
+		q.Set("alpn", in.Alpn)
+	}
+	u := url.URL{
+		Scheme:   "hysteria2",
+		User:     url.User(pw),
+		Host:     fmt.Sprintf("%s:%d", hostport(in.Host), in.Port),
+		RawQuery: sortedQuery(q),
+	}
+	return u.String() + "#" + url.QueryEscape(orDefault(in.Remark, "hami")), nil
+}
+
+func tuic(in Inbound, c Client) (string, error) {
+	if c.UUID == "" {
+		return "", fmt.Errorf("tuic client without uuid")
+	}
+	if c.Password == "" && c.SSPassword == "" {
+		return "", fmt.Errorf("tuic client without password")
+	}
+	pw := c.Password
+	if pw == "" {
+		pw = c.SSPassword
+	}
+	q := url.Values{}
+	q.Set("congestion_control", orDefault(in.CongestionControl, "bbr"))
+	q.Set("alpn", orDefault(in.Alpn, "h3"))
+	q.Set("sni", orDefault(in.SNI, in.Host))
+	q.Set("udp_relay_mode", "native")
+	q.Set("allow_insecure", "0")
+	u := url.URL{
+		Scheme:   "tuic",
+		User:     url.UserPassword(c.UUID, pw),
+		Host:     fmt.Sprintf("%s:%d", hostport(in.Host), in.Port),
+		RawQuery: sortedQuery(q),
+	}
+	return u.String() + "#" + url.QueryEscape(orDefault(in.Remark, "hami")), nil
+}
+
+func anytls(in Inbound, c Client) (string, error) {
+	pw := c.Password
+	if pw == "" {
+		pw = c.SSPassword
+	}
+	if pw == "" {
+		pw = c.UUID
+	}
+	if pw == "" {
+		return "", fmt.Errorf("anytls client without password")
+	}
+	q := url.Values{}
+	if in.SNI != "" {
+		q.Set("sni", in.SNI)
+	}
+	q.Set("insecure", "0")
+	// reference format uses /? before query
+	u := url.URL{
+		Scheme:   "anytls",
+		User:     url.User(pw),
+		Host:     fmt.Sprintf("%s:%d", hostport(in.Host), in.Port),
+		Path:     "/",
+		RawQuery: sortedQuery(q),
 	}
 	return u.String() + "#" + url.QueryEscape(orDefault(in.Remark, "hami")), nil
 }

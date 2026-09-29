@@ -56,6 +56,12 @@ func templateApply(args []string) int {
 	sid := fs.String("sid", "", "short id, auto-generated if empty")
 	nodeRef := fs.String("node", "", "")
 	listen := fs.String("listen", "0.0.0.0", "")
+	certFile := fs.String("cert-file", "", "tls cert path for sing-box")
+	keyFile := fs.String("key-file", "", "tls key path for sing-box")
+	obfsType := fs.String("obfs-type", "", "hysteria2 obfs type")
+	obfsPassword := fs.String("obfs-password", "", "hysteria2 obfs password")
+	alpn := fs.String("alpn", "", "alpn for sing-box")
+	cc := fs.String("cc", "", "congestion control for tuic")
 	fs.SetOutput(os.Stderr)
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -110,33 +116,57 @@ func templateApply(args []string) int {
 		}
 	}
 
+	obfsT := tmpl.ObfsType
+	if *obfsType != "" {
+		obfsT = *obfsType
+	}
+	obfsP := tmpl.ObfsPassword
+	if *obfsPassword != "" {
+		obfsP = *obfsPassword
+	}
+	alpnV := tmpl.Alpn
+	if *alpn != "" {
+		alpnV = *alpn
+	}
+	ccV := tmpl.CongestionControl
+	if *cc != "" {
+		ccV = *cc
+	}
+
 	in := &store.Inbound{
-		NodeID:      nodeID,
-		Remark:      *remark,
-		Protocol:    tmpl.Protocol,
-		Port:        *port,
-		Host:        *host,
-		Transport:   tmpl.Transport,
-		Security:    tmpl.Security,
-		SNI:         *sni,
-		PublicKey:   pubKey,
-		ShortID:     shortID,
-		Fingerprint: tmpl.Fingerprint,
-		Path:        tmpl.Path,
-		XHTTPMode:   tmpl.XHTTPMode,
-		HeaderType:  tmpl.HeaderType,
-		Flow:        tmpl.Flow,
+		NodeID:            nodeID,
+		Remark:            *remark,
+		Protocol:          tmpl.Protocol,
+		Port:              *port,
+		Host:              *host,
+		Transport:         tmpl.Transport,
+		Security:          tmpl.Security,
+		SNI:               *sni,
+		PublicKey:         pubKey,
+		ShortID:           shortID,
+		Fingerprint:       tmpl.Fingerprint,
+		Path:              tmpl.Path,
+		XHTTPMode:         tmpl.XHTTPMode,
+		HeaderType:        tmpl.HeaderType,
+		Flow:              tmpl.Flow,
+		ObfsType:          obfsT,
+		ObfsPassword:      obfsP,
+		Alpn:              alpnV,
+		CongestionControl: ccV,
 	}
 	if err := st.CreateInbound(in); err != nil {
 		fmt.Fprintf(os.Stderr, "create: %v\n", err)
 		return 1
 	}
-	if tmpl.Security == "reality" {
+	// secrets: reality private key + dest, or TLS cert for sing-box
+	if tmpl.Security == "reality" || *certFile != "" || *keyFile != "" || privKey != "" || *dest != "" {
 		if err := st.SetInboundSecret(store.InboundSecret{
 			InboundID:  in.ID,
 			PrivateKey: privKey,
 			Dest:       *dest,
 			Listen:     *listen,
+			CertFile:   *certFile,
+			KeyFile:    *keyFile,
 		}); err != nil {
 			fmt.Fprintf(os.Stderr, "secret: %v\n", err)
 			return 1

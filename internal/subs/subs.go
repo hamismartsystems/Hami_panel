@@ -75,6 +75,8 @@ func LinkOf(e Entry) (string, error) {
 		SpiderX: e.Inbound.SpiderX, Fingerprint: e.Inbound.Fingerprint,
 		Path: e.Inbound.Path, XHTTPMode: e.Inbound.XHTTPMode,
 		HeaderType: e.Inbound.HeaderType, Flow: e.Inbound.Flow,
+		ObfsType: e.Inbound.ObfsType, ObfsPassword: e.Inbound.ObfsPassword,
+		Alpn: e.Inbound.Alpn, CongestionControl: e.Inbound.CongestionControl,
 	}, link.Client{
 		UUID: e.Client.UUID, Password: e.Client.Password, Email: e.Client.Email,
 		Method: e.Client.Method, SSPassword: e.Client.SSPassword,

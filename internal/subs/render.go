@@ -132,6 +132,31 @@ func clashNode(e Entry) ([]string, error) {
 		add("    cipher: " + q(c.Method))
 		lines = append([]string{lines[0], "    type: ss"}, lines[1:]...)
 		add("    udp: true")
+	case "hysteria2", "hy2":
+		add("    password: " + q(orPassword(c)))
+		lines = append([]string{lines[0], "    type: hysteria2"}, lines[1:]...)
+		add("    udp: true")
+		if in.ObfsType != "" {
+			add("    obfs: " + q(in.ObfsType))
+			if in.ObfsPassword != "" {
+				add("    obfs-password: " + q(in.ObfsPassword))
+			}
+		}
+		if in.Alpn != "" {
+			add("    alpn: [" + q(in.Alpn) + "]")
+		}
+	case "tuic":
+		add("    uuid: " + q(c.UUID))
+		add("    password: " + q(orPassword(c)))
+		lines = append([]string{lines[0], "    type: tuic"}, lines[1:]...)
+		add("    udp: true")
+		add("    alpn: [" + q(orAlpn(in.Alpn)) + "]")
+		add("    congestion-controller: " + q(orCC(in.CongestionControl)))
+		add("    udp-relay-mode: native")
+	case "anytls":
+		add("    password: " + q(orPassword(c)))
+		lines = append([]string{lines[0], "    type: anytls"}, lines[1:]...)
+		add("    udp: true")
 	default:
 		return nil, fmt.Errorf("clash: unsupported protocol %q", in.Protocol)
 	}
@@ -237,15 +262,43 @@ func singboxOutbound(e Entry) (map[string]interface{}, error) {
 		m["type"] = "shadowsocks"
 		m["method"] = c.Method
 		m["password"] = c.SSPassword
+	case "hysteria2", "hy2":
+		m["type"] = "hysteria2"
+		m["password"] = orPassword(c)
+		if in.ObfsType != "" {
+			m["obfs"] = map[string]interface{}{
+				"type":     in.ObfsType,
+				"password": in.ObfsPassword,
+			}
+		}
+	case "tuic":
+		m["type"] = "tuic"
+		m["uuid"] = c.UUID
+		m["password"] = orPassword(c)
+		m["congestion_control"] = orCC(in.CongestionControl)
+		m["udp_relay_mode"] = "native"
+	case "anytls":
+		m["type"] = "anytls"
+		m["password"] = orPassword(c)
 	default:
 		return nil, fmt.Errorf("singbox: unsupported protocol %q", in.Protocol)
 	}
 
+	// TLS for all protocols that need it
 	sec := strings.ToLower(in.Security)
-	if sec == "tls" || sec == "reality" {
+	isSingbox := false
+	switch strings.ToLower(in.Protocol) {
+	case "hysteria2", "hy2", "tuic", "anytls":
+		isSingbox = true
+	}
+	if sec == "tls" || sec == "reality" || isSingbox {
 		tls := map[string]interface{}{
 			"enabled":     true,
 			"server_name": in.SNI,
+		}
+		// sing-box protocols use h3 alpn
+		if isSingbox {
+			tls["alpn"] = []string{orAlpn(in.Alpn)}
 		}
 		if sec == "reality" {
 			tls["utls"] = map[string]interface{}{"enabled": true, "fingerprint": orFingerprint(in.Fingerprint)}
@@ -340,6 +393,20 @@ func orMode(m string) string {
 		return "auto"
 	}
 	return m
+}
+
+func orAlpn(a string) string {
+	if a == "" {
+		return "h3"
+	}
+	return a
+}
+
+func orCC(c string) string {
+	if c == "" {
+		return "bbr"
+	}
+	return c
 }
 
 // sortedNames is exported for tests of helper behaviour.

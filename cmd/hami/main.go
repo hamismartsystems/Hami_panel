@@ -14,6 +14,7 @@ import (
 
 	"github.com/hamismartsystems/hami_panel/internal/backup"
 	"github.com/hamismartsystems/hami_panel/internal/guard"
+	"github.com/hamismartsystems/hami_panel/internal/singbox"
 	"github.com/hamismartsystems/hami_panel/internal/store"
 	"github.com/hamismartsystems/hami_panel/internal/xray"
 )
@@ -66,13 +67,14 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage:\n  hami gen -spec inbounds.json -out config.json\n  hami canary -spec inbounds.json [-xray /path/to/xray]\n  hami guard -spec inbounds.json [-dial 127.0.0.1] [-db panel.db] [-repair -xray /path/to/xray -config config.json]\n  hami pin [-dir /var/lib/hami]\n  hami upgrade -dir /var/lib/hami -bin ./xray -version 26.3.27\n  hami backup -db panel.db -out backup.tar.gz [-xray-dir /var/lib/hami]\n  hami restore -in backup.tar.gz -db panel.db [-xray-dir /var/lib/hami]\n  hami audit -db panel.db [-tail 50] [-level warn]\n  hami user ... (hami user with no args prints user usage)\n  hami sub serve -db panel.db [-addr :8080] [-base-url URL]\n  hami notice -db panel.db [-days 3] [-ratio 0.8] [-telegram TOKEN:CHATID]\n  hami node add|list|check|remove -db panel.db\n  hami agent run -listen ADDR -name NAME -api-key KEY\n  hami template list\n  hami template apply -db panel.db -template NAME -remark REMARK -host HOST -port PORT -sni SNI -dest DEST ...\n  hami reality check -dest HOST:PORT -sni SNI\n  hami reality keygen\n  hami reality rotate -db panel.db -id ID [-new-sid] [-new-key]\n")
+	fmt.Fprintf(os.Stderr, "usage:\n  hami gen -spec inbounds.json -out config.json [-core xray|singbox]\n  hami canary -spec inbounds.json [-xray /path/to/xray]\n  hami guard -spec inbounds.json [-dial 127.0.0.1] [-db panel.db] [-repair -xray /path/to/xray -config config.json]\n  hami pin [-dir /var/lib/hami]\n  hami upgrade -dir /var/lib/hami -bin ./xray -version 26.3.27\n  hami backup -db panel.db -out backup.tar.gz [-xray-dir /var/lib/hami]\n  hami restore -in backup.tar.gz -db panel.db [-xray-dir /var/lib/hami]\n  hami audit -db panel.db [-tail 50] [-level warn]\n  hami user ... (hami user with no args prints user usage)\n  hami sub serve -db panel.db [-addr :8080] [-base-url URL]\n  hami notice -db panel.db [-days 3] [-ratio 0.8] [-telegram TOKEN:CHATID]\n  hami node add|list|check|remove -db panel.db\n  hami agent run -listen ADDR -name NAME -api-key KEY\n  hami template list\n  hami template apply -db panel.db -template NAME -remark REMARK -host HOST -port PORT -sni SNI -dest DEST ...\n  hami reality check -dest HOST:PORT -sni SNI\n  hami reality keygen\n  hami reality rotate -db panel.db -id ID [-new-sid] [-new-key]\n")
 }
 
 func gen(args []string) int {
 	fs := flag.NewFlagSet("gen", flag.ContinueOnError)
 	specPath := fs.String("spec", "", "inbound spec JSON")
-	outPath := fs.String("out", "", "xray config to write")
+	outPath := fs.String("out", "", "config to write")
+	core := fs.String("core", "xray", "core type: xray or singbox")
 	fs.SetOutput(os.Stderr)
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -86,34 +88,66 @@ func gen(args []string) int {
 		fmt.Fprintf(os.Stderr, "read spec: %v\n", err)
 		return 1
 	}
-	var spec xray.Spec
-	if err := json.Unmarshal(raw, &spec); err != nil {
-		fmt.Fprintf(os.Stderr, "spec: %v\n", err)
-		return 1
+	switch *core {
+	case "singbox", "sing-box":
+		var spec singbox.Spec
+		if err := json.Unmarshal(raw, &spec); err != nil {
+			fmt.Fprintf(os.Stderr, "spec: %v\n", err)
+			return 1
+		}
+		endpoints, err := spec.Endpoints()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "spec: %v\n", err)
+			return 1
+		}
+		cfg, err := singbox.Build(endpoints)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "config: %v\n", err)
+			return 1
+		}
+		links, err := singbox.Links(endpoints)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "link: %v\n", err)
+			return 1
+		}
+		if err := os.WriteFile(*outPath, cfg, 0o600); err != nil {
+			fmt.Fprintf(os.Stderr, "write config: %v\n", err)
+			return 1
+		}
+		for _, l := range links {
+			fmt.Println(l)
+		}
+		return 0
+	default:
+		var spec xray.Spec
+		if err := json.Unmarshal(raw, &spec); err != nil {
+			fmt.Fprintf(os.Stderr, "spec: %v\n", err)
+			return 1
+		}
+		endpoints, err := spec.Endpoints()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "spec: %v\n", err)
+			return 1
+		}
+		cfg, err := xray.Build(endpoints)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "config: %v\n", err)
+			return 1
+		}
+		links, err := xray.Links(endpoints)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "link: %v\n", err)
+			return 1
+		}
+		if err := os.WriteFile(*outPath, cfg, 0o600); err != nil {
+			fmt.Fprintf(os.Stderr, "write config: %v\n", err)
+			return 1
+		}
+		for _, l := range links {
+			fmt.Println(l)
+		}
+		return 0
 	}
-	endpoints, err := spec.Endpoints()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "spec: %v\n", err)
-		return 1
-	}
-	cfg, err := xray.Build(endpoints)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "config: %v\n", err)
-		return 1
-	}
-	links, err := xray.Links(endpoints)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "link: %v\n", err)
-		return 1
-	}
-	if err := os.WriteFile(*outPath, cfg, 0o600); err != nil {
-		fmt.Fprintf(os.Stderr, "write config: %v\n", err)
-		return 1
-	}
-	for _, l := range links {
-		fmt.Println(l)
-	}
-	return 0
 }
 
 func canary(args []string) int {
