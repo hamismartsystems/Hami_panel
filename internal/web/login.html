@@ -374,7 +374,7 @@
   }
 </style>
 </head>
-<body data-theme="light">
+<body data-theme="dark">
 <header class="header">
   <div class="logo">
     <div class="logo-mark">H</div>
@@ -533,10 +533,10 @@ systemctl restart hami-panel
 
   try{
     const savedTheme = localStorage.getItem('hpui-theme');
-    if(savedTheme) applyTheme(savedTheme); else applyTheme('light');
+    if(savedTheme) applyTheme(savedTheme); else applyTheme('dark');
     const savedLang = localStorage.getItem('hpui-lang');
     if(savedLang) applyLang(savedLang); else applyLang('en');
-  }catch(e){ applyTheme('light'); applyLang('en'); }
+  }catch(e){ applyTheme('dark'); applyLang('en'); }
 
   const modal = document.getElementById('modal');
   document.getElementById('forgotLink').addEventListener('click', (e)=>{ e.preventDefault(); modal.classList.add('open'); });
