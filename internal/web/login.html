@@ -1,248 +1,215 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HP-UI — HAMI PANEL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
 <style>
   :root{
     --light-bg:#F6FAF2;
     --light-card:#FFFFFF;
-    --light-accent:#9DC183;
-    --light-accent-2:#7AAE64;
+    --light-border:#DDE8D6;
     --light-text:#1E2A1A;
-    --light-muted:#5A6E54;
+    --light-muted:#6B7F66;
+    --light-accent:#0B6623;
 
     --dark-bg:#0B6623;
-    --dark-card:#0E7A2A;
-    --dark-accent:#9DC183;
+    --dark-card:#103F1A;
+    --dark-border:rgba(255,255,255,.14);
     --dark-text:#EAF6E3;
     --dark-muted:#A8C9A0;
 
     --vdark-bg:#043927;
-    --vdark-card:#0A4D2E;
-    --vdark-accent:#9DC183;
+    --vdark-card:#0A2F1E;
+    --vdark-border:rgba(255,255,255,.12);
     --vdark-text:#DFF0D8;
     --vdark-muted:#8BB88A;
 
-    --radius:18px;
-    --shadow:0 20px 60px rgba(0,0,0,.18);
+    --radius:16px;
+    --radius-sm:12px;
+    --shadow:0 18px 50px rgba(0,0,0,.18);
+    --shadow-sm:0 8px 24px rgba(0,0,0,.12);
   }
   *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
   body{
-    font-family: Vazirmatn, Tahoma, "Segoe UI", sans-serif;
+    font-family: Inter, Vazirmatn, "Segoe UI", Tahoma, sans-serif;
     min-height:100vh;
-    display:flex;
     background:var(--light-bg);
     color:var(--light-text);
     transition:background .3s,color .3s;
+    /* diamond pattern — very faint */
+    background-image:
+      linear-gradient(45deg, rgba(0,0,0,.035) 1px, transparent 1px),
+      linear-gradient(-45deg, rgba(0,0,0,.035) 1px, transparent 1px);
+    background-size:28px 28px;
+    background-position:0 0, 14px 14px;
   }
-  /* themes */
-  body[data-theme="light"]{background:var(--light-bg);color:var(--light-text)}
-  body[data-theme="dark"]{background:var(--dark-bg);color:var(--dark-text)}
-  body[data-theme="vdark"]{background:var(--vdark-bg);color:var(--vdark-text)}
-
-  .shell{
-    display:flex;
-    width:100%;
-    min-height:100vh;
+  body[data-theme="light"]{
+    background-color:var(--light-bg);
+    color:var(--light-text);
+    background-image:
+      linear-gradient(45deg, rgba(0,0,0,.035) 1px, transparent 1px),
+      linear-gradient(-45deg, rgba(0,0,0,.035) 1px, transparent 1px);
+    background-size:28px 28px;
   }
-  /* left branding */
-  .brand{
-    width:42%;
-    min-width:320px;
-    padding:38px 36px;
-    display:flex;
-    flex-direction:column;
-    justify-content:space-between;
-    position:relative;
-    overflow:hidden;
-  }
-  body[data-theme="light"] .brand{
-    background:linear-gradient(160deg, #9DC183 0%, #7AAE64 45%, #0B6623 100%);
-    color:#fff;
-  }
-  body[data-theme="dark"] .brand{
-    background:linear-gradient(160deg, #0B6623 0%, #0E7A2A 55%, #043927 100%);
+  body[data-theme="dark"]{
+    background-color:var(--dark-bg);
     color:var(--dark-text);
+    background-image:
+      linear-gradient(45deg, rgba(255,255,255,.045) 1px, transparent 1px),
+      linear-gradient(-45deg, rgba(255,255,255,.045) 1px, transparent 1px);
+    background-size:28px 28px;
   }
-  body[data-theme="vdark"] .brand{
-    background:linear-gradient(160deg, #043927 0%, #0B6623 85%, #022A1C 100%);
+  body[data-theme="vdark"]{
+    background-color:var(--vdark-bg);
     color:var(--vdark-text);
+    background-image:
+      linear-gradient(45deg, rgba(255,255,255,.04) 1px, transparent 1px),
+      linear-gradient(-45deg, rgba(255,255,255,.04) 1px, transparent 1px);
+    background-size:28px 28px;
   }
-  .brand::before{
-    content:"";
-    position:absolute;
-    inset:-20%;
-    background:
-      radial-gradient(600px 400px at 20% 15%, rgba(255,255,255,.18), transparent 60%),
-      radial-gradient(500px 300px at 80% 85%, rgba(157,193,131,.35), transparent 70%);
-    pointer-events:none;
-  }
-  .brand > *{position:relative;z-index:1}
-  .topbar{
+
+  /* header */
+  .header{
+    height:64px;
     display:flex;
-    justify-content:space-between;
     align-items:center;
+    justify-content:space-between;
+    padding:0 24px;
+    position:sticky;
+    top:0;
+    z-index:10;
+    backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px);
+    border-bottom:1px solid transparent;
+  }
+  body[data-theme="light"] .header{
+    background:rgba(246,250,242,.85);
+    border-color:rgba(0,0,0,.06);
+  }
+  body[data-theme="dark"] .header{
+    background:rgba(11,102,35,.78);
+    border-color:rgba(255,255,255,.12);
+  }
+  body[data-theme="vdark"] .header{
+    background:rgba(4,57,39,.82);
+    border-color:rgba(255,255,255,.10);
   }
   .logo{
     display:flex;
     align-items:center;
     gap:12px;
     font-weight:900;
-    letter-spacing:.5px;
   }
   .logo-mark{
-    width:44px;height:44px;
-    border-radius:12px;
+    width:40px;height:40px;
+    border-radius:10px;
+    background:#0B6623;
+    color:#fff;
+    display:grid;
+    place-items:center;
+    font-size:18px;
+    font-weight:900;
+    box-shadow:var(--shadow-sm);
+  }
+  body[data-theme="dark"] .logo-mark,
+  body[data-theme="vdark"] .logo-mark{
     background:#fff;
     color:#0B6623;
-    display:grid;
-    place-items:center;
-    font-size:22px;
-    font-weight:900;
-    box-shadow:0 8px 24px rgba(0,0,0,.18);
   }
-  .logo-text b{display:block;font-size:18px;line-height:1}
-  .logo-text span{display:block;font-size:11px;opacity:.9;letter-spacing:2px;margin-top:2px}
-  .theme-switch{
-    display:flex;
-    gap:8px;
-    background:rgba(0,0,0,.18);
-    padding:6px;
-    border-radius:999px;
-    backdrop-filter:blur(8px);
-  }
-  .theme-btn{
-    width:32px;height:32px;
-    border-radius:50%;
-    border:2px solid rgba(255,255,255,.7);
-    cursor:pointer;
-    display:grid;
-    place-items:center;
-    font-size:14px;
-    transition:transform .15s, box-shadow .15s;
-  }
-  .theme-btn:hover{transform:scale(1.08)}
-  .theme-btn.active{box-shadow:0 0 0 3px rgba(255,255,255,.9)}
-  .theme-btn[data-t="light"]{background:#9DC183}
-  .theme-btn[data-t="dark"]{background:#0B6623}
-  .theme-btn[data-t="vdark"]{background:#043927}
+  .logo-text b{display:block;font-size:15px;line-height:1;letter-spacing:.3px}
+  .logo-text span{display:block;font-size:10px;opacity:.75;letter-spacing:2px;margin-top:2px;font-weight:600}
 
-  .brand-main{margin-top:60px}
-  .brand-main h1{
-    font-size:38px;
-    line-height:1.1;
-    font-weight:900;
-    letter-spacing:-.5px;
-  }
-  .brand-main h1 span{
-    display:block;
-    font-size:16px;
-    font-weight:600;
-    opacity:.9;
-    margin-top:10px;
-    letter-spacing:.3px;
-  }
-  .brand-main p{
-    margin-top:18px;
-    font-size:14px;
-    line-height:1.9;
-    opacity:.92;
-    max-width:36ch;
-  }
-  .brand-features{
-    margin-top:28px;
-    display:grid;
-    gap:12px;
-  }
-  .feat{
-    display:flex;
-    gap:10px;
-    align-items:flex-start;
-    font-size:13px;
-    line-height:1.7;
-    background:rgba(255,255,255,.12);
-    border:1px solid rgba(255,255,255,.18);
-    padding:10px 12px;
-    border-radius:12px;
-    backdrop-filter:blur(6px);
-  }
-  .feat i{
-    width:26px;height:26px;
-    border-radius:8px;
-    background:#fff;
-    color:#0B6623;
-    display:grid;
-    place-items:center;
-    font-style:normal;
-    font-weight:800;
-    flex-shrink:0;
-  }
-  .brand-foot{
-    font-size:11px;
-    opacity:.8;
-    letter-spacing:.6px;
-  }
-
-  /* right form */
-  .panel{
-    flex:1;
+  .header-actions{
     display:flex;
     align-items:center;
+    gap:10px;
+  }
+  .icon-btn{
+    height:36px;
+    min-width:36px;
+    padding:0 12px;
+    border-radius:999px;
+    border:1px solid;
+    cursor:pointer;
+    font-family:inherit;
+    font-size:13px;
+    font-weight:600;
+    display:inline-flex;
+    align-items:center;
     justify-content:center;
-    padding:28px;
+    gap:6px;
+    transition:all .15s;
+    user-select:none;
+  }
+  body[data-theme="light"] .icon-btn{
+    background:#fff;
+    border-color:var(--light-border);
+    color:var(--light-text);
+  }
+  body[data-theme="dark"] .icon-btn{
+    background:rgba(255,255,255,.10);
+    border-color:rgba(255,255,255,.18);
+    color:var(--dark-text);
+  }
+  body[data-theme="vdark"] .icon-btn{
+    background:rgba(255,255,255,.08);
+    border-color:rgba(255,255,255,.14);
+    color:var(--vdark-text);
+  }
+  .icon-btn:hover{transform:translateY(-1px);box-shadow:var(--shadow-sm)}
+  .icon-btn:active{transform:translateY(0)}
+
+  /* main layout — form top-left opposite brand */
+  .main{
+    max-width:1180px;
+    margin:0 auto;
+    padding:28px 24px 40px;
+    display:grid;
+    grid-template-columns: 440px 1fr;
+    gap:48px;
+    align-items:start;
+  }
+  /* left — login card top-left */
+  .login-side{
+    order:1;
   }
   .form-wrap{
     width:100%;
-    max-width:420px;
+    border-radius:var(--radius);
+    padding:24px;
+    box-shadow:var(--shadow);
+    border:1px solid;
   }
   body[data-theme="light"] .form-wrap{
     background:var(--light-card);
-    border:1px solid #E6EEDF;
-    border-radius:var(--radius);
-    padding:28px;
-    box-shadow:var(--shadow);
+    border-color:var(--light-border);
   }
   body[data-theme="dark"] .form-wrap{
-    background:rgba(255,255,255,.06);
-    border:1px solid rgba(255,255,255,.14);
-    border-radius:var(--radius);
-    padding:28px;
-    backdrop-filter:blur(12px);
+    background:var(--dark-card);
+    border-color:var(--dark-border);
+    backdrop-filter:blur(10px);
   }
   body[data-theme="vdark"] .form-wrap{
-    background:rgba(255,255,255,.05);
-    border:1px solid rgba(255,255,255,.12);
-    border-radius:var(--radius);
-    padding:28px;
-    backdrop-filter:blur(14px);
+    background:var(--vdark-card);
+    border-color:var(--vdark-border);
+    backdrop-filter:blur(12px);
   }
-  .form-head{margin-bottom:22px}
-  .form-head h2{
-    font-size:22px;
-    font-weight:800;
-  }
-  .form-head p{
-    margin-top:6px;
-    font-size:13px;
-    opacity:.75;
-    line-height:1.7;
-  }
-  .field{margin-bottom:16px}
-  .field label{
-    display:block;
-    font-size:12px;
-    font-weight:700;
-    margin-bottom:7px;
-    opacity:.9;
-  }
+  .form-head{margin-bottom:18px}
+  .form-head h2{font-size:20px;font-weight:800;letter-spacing:-.2px}
+  .form-head p{margin-top:6px;font-size:12.5px;opacity:.7;line-height:1.6}
+
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:11px;font-weight:700;letter-spacing:.4px;margin-bottom:6px;opacity:.9;text-transform:uppercase}
+  .input-wrap{position:relative}
   .input{
     width:100%;
-    height:46px;
-    border-radius:12px;
+    height:44px;
+    border-radius:var(--radius-sm);
     border:1px solid;
-    padding:0 14px 0 42px;
+    padding:0 12px 0 38px;
     font-size:14px;
     font-family:inherit;
     outline:none;
@@ -255,7 +222,7 @@
   }
   body[data-theme="light"] .input:focus{
     border-color:#0B6623;
-    box-shadow:0 0 0 4px rgba(157,193,131,.35);
+    box-shadow:0 0 0 4px rgba(157,193,131,.32);
   }
   body[data-theme="dark"] .input{
     background:rgba(0,0,0,.22);
@@ -264,7 +231,7 @@
   }
   body[data-theme="dark"] .input:focus{
     border-color:#9DC183;
-    box-shadow:0 0 0 4px rgba(157,193,131,.25);
+    box-shadow:0 0 0 4px rgba(157,193,131,.22);
   }
   body[data-theme="vdark"] .input{
     background:rgba(0,0,0,.32);
@@ -273,125 +240,217 @@
   }
   body[data-theme="vdark"] .input:focus{
     border-color:#9DC183;
-    box-shadow:0 0 0 4px rgba(157,193,131,.2);
+    box-shadow:0 0 0 4px rgba(157,193,131,.18);
   }
-  .input-wrap{position:relative}
   .input-icon{
     position:absolute;
-    left:12px;
+    left:10px;
     top:50%;
     transform:translateY(-50%);
-    width:22px;height:22px;
-    opacity:.7;
+    width:20px;height:20px;
+    opacity:.65;
     display:grid;
     place-items:center;
-    font-size:14px;
+    font-size:13px;
+    pointer-events:none;
   }
   .row{
     display:flex;
     justify-content:space-between;
     align-items:center;
-    margin:10px 0 18px;
+    margin:8px 0 16px;
     font-size:12px;
   }
-  .check{
-    display:flex;
-    gap:8px;
-    align-items:center;
-    cursor:pointer;
-    user-select:none;
+  .check{display:flex;gap:7px;align-items:center;cursor:pointer;user-select:none;opacity:.9}
+  .check input{accent-color:#0B6623;width:14px;height:14px}
+  .link{
+    text-decoration:none;
+    font-weight:600;
+    opacity:.85;
   }
-  .check input{accent-color:#0B6623}
+  body[data-theme="light"] .link{color:#0B6623}
+  body[data-theme="dark"] .link, body[data-theme="vdark"] .link{color:#9DC183}
+  .link:hover{opacity:1;text-decoration:underline}
+
   .btn{
     width:100%;
-    height:48px;
-    border-radius:12px;
+    height:46px;
+    border-radius:var(--radius-sm);
     border:0;
     cursor:pointer;
     font-family:inherit;
-    font-size:15px;
+    font-size:14px;
     font-weight:800;
     letter-spacing:.3px;
     color:#fff;
     background:linear-gradient(135deg, #0B6623 0%, #043927 100%);
-    box-shadow:0 12px 28px rgba(11,102,35,.35);
+    box-shadow:0 10px 24px rgba(11,102,35,.32);
     transition:transform .12s, box-shadow .12s, filter .15s;
   }
-  .btn:hover{transform:translateY(-1px);box-shadow:0 16px 32px rgba(11,102,35,.42);filter:brightness(1.05)}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 14px 28px rgba(11,102,35,.38);filter:brightness(1.05)}
   .btn:active{transform:translateY(0)}
-  .hint{
-    margin-top:14px;
-    font-size:11px;
-    line-height:1.7;
-    opacity:.7;
-    text-align:center;
-  }
+  .btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
+
   .foot{
-    margin-top:22px;
+    margin-top:18px;
     text-align:center;
-    font-size:11px;
-    opacity:.6;
-    letter-spacing:.4px;
+    font-size:10.5px;
+    opacity:.55;
+    letter-spacing:.3px;
   }
 
+  /* right — brand opposite */
+  .brand-side{
+    order:2;
+    padding-top:8px;
+  }
+  .brand-card{
+    border-radius:var(--radius);
+    padding:22px;
+    border:1px dashed;
+    background:rgba(255,255,255,.04);
+  }
+  body[data-theme="light"] .brand-card{
+    background:rgba(255,255,255,.7);
+    border-color:rgba(11,102,35,.18);
+  }
+  body[data-theme="dark"] .brand-card{
+    background:rgba(255,255,255,.06);
+    border-color:rgba(255,255,255,.16);
+  }
+  body[data-theme="vdark"] .brand-card{
+    background:rgba(255,255,255,.05);
+    border-color:rgba(255,255,255,.12);
+  }
+  .brand-card h1{
+    font-size:28px;
+    line-height:1.1;
+    font-weight:900;
+    letter-spacing:-.4px;
+  }
+  .brand-card h1 span{
+    display:block;
+    font-size:13px;
+    font-weight:600;
+    opacity:.8;
+    margin-top:6px;
+    letter-spacing:.3px;
+  }
+  .brand-card p{
+    margin-top:12px;
+    font-size:13px;
+    line-height:1.7;
+    opacity:.8;
+  }
+  .brand-meta{
+    margin-top:16px;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .meta-pill{
+    font-size:10.5px;
+    font-weight:700;
+    letter-spacing:.4px;
+    padding:6px 10px;
+    border-radius:999px;
+    border:1px solid;
+  }
+  body[data-theme="light"] .meta-pill{
+    background:#EAF4E2;
+    border-color:#C5D9B8;
+    color:#0B6623;
+  }
+  body[data-theme="dark"] .meta-pill{
+    background:rgba(157,193,131,.18);
+    border-color:rgba(157,193,131,.28);
+    color:#EAF6E3;
+  }
+  body[data-theme="vdark"] .meta-pill{
+    background:rgba(157,193,131,.14);
+    border-color:rgba(157,193,131,.22);
+    color:#DFF0D8;
+  }
+
+  /* modal */
+  .modal-backdrop{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.45);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+    z-index:50;
+  }
+  .modal-backdrop.open{display:flex}
+  .modal{
+    width:100%;
+    max-width:460px;
+    border-radius:16px;
+    padding:20px;
+    box-shadow:0 24px 64px rgba(0,0,0,.35);
+    border:1px solid;
+  }
+  body[data-theme="light"] .modal{background:#fff;border-color:#DDE8D6}
+  body[data-theme="dark"] .modal{background:#123F1C;border-color:rgba(255,255,255,.18);color:var(--dark-text)}
+  body[data-theme="vdark"] .modal{background:#0B2F1E;border-color:rgba(255,255,255,.14);color:var(--vdark-text)}
+  .modal h3{font-size:16px;font-weight:800;margin-bottom:8px}
+  .modal p{font-size:12.5px;line-height:1.7;opacity:.85}
+  .modal code{
+    display:block;
+    margin-top:10px;
+    padding:10px 12px;
+    border-radius:10px;
+    font-size:12px;
+    font-family:ui-monospace, SFMono-Regular, Menlo, monospace;
+    overflow:auto;
+  }
+  body[data-theme="light"] .modal code{background:#F2F7EF;border:1px solid #DDE8D6}
+  body[data-theme="dark"] .modal code{background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.14)}
+  body[data-theme="vdark"] .modal code{background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.12)}
+  .modal-actions{margin-top:14px;display:flex;justify-content:flex-end;gap:8px}
+  .modal-actions .icon-btn{height:36px}
+
   @media (max-width:900px){
-    .shell{flex-direction:column}
-    .brand{width:100%;min-height:38vh;padding:22px 20px}
-    .brand-main{margin-top:22px}
-    .brand-main h1{font-size:30px}
-    .panel{padding:18px}
+    .main{grid-template-columns:1fr;gap:20px;padding:16px}
+    .login-side{order:2}
+    .brand-side{order:1}
+    .header{padding:0 14px}
   }
 </style>
 </head>
 <body data-theme="light">
-<div class="shell">
-  <!-- BRAND — left -->
-  <aside class="brand">
-    <div class="topbar">
-      <div class="logo">
-        <div class="logo-mark">H</div>
-        <div class="logo-text"><b>HAMI PANEL</b><span>HP-UI</span></div>
-      </div>
-      <div class="theme-switch" title="تم">
-        <button class="theme-btn active" data-t="light" aria-label="روشن">☀️</button>
-        <button class="theme-btn" data-t="dark" aria-label="تیره">🌙</button>
-        <button class="theme-btn" data-t="vdark" aria-label="خیلی تیره">🌑</button>
-      </div>
-    </div>
+<header class="header">
+  <div class="logo">
+    <div class="logo-mark">H</div>
+    <div class="logo-text"><b>HAMI PANEL</b><span>HP-UI</span></div>
+  </div>
+  <div class="header-actions">
+    <button class="icon-btn" id="langBtn" title="Language / زبان">EN</button>
+    <button class="icon-btn" id="themeBtn" title="Theme">☀️ Light</button>
+  </div>
+</header>
 
-    <div class="brand-main">
-      <h1>پنل حامی
-        <span>HP-UI — HAMI SMART SYSTEMS</span>
-      </h1>
-      <p>مدیریت اینباند، کاربر، ساب چندقالبه، نود و هسته‌های Xray و sing-box — طراحی کاملاً اختصاصی.</p>
-
-      <div class="brand-features">
-        <div class="feat"><i>◐</i><div><b>۱۱ قالب آماده</b> — VLESS Reality / XHTTP / gRPC / Hysteria2 / TUIC / AnyTLS</div></div>
-        <div class="feat"><i>⚡</i><div><b>ساب هوشمند</b> — v2ray / Clash / sing-box / Shadowrocket + سلامت نود</div></div>
-      </div>
-    </div>
-
-    <div class="brand-foot">HAMI SMART SYSTEMS — hp-ui • v0.4.0</div>
-  </aside>
-
-  <!-- FORM — right -->
-  <main class="panel">
+<div class="main">
+  <!-- LOGIN — top-left opposite brand -->
+  <div class="login-side">
     <div class="form-wrap">
       <div class="form-head">
-        <h2>ورود به پنل حامی</h2>
-        <p>نام کاربری و رمز عبور ادمین را وارد کنید.</p>
+        <h2 data-i18n="login_title">Sign in to HAMI PANEL</h2>
+        <p data-i18n="login_sub">Enter your admin credentials to continue.</p>
       </div>
 
-      <form id="f" method="post" action="/api/login" onsubmit="return false">
+      <form id="f" onsubmit="return false">
         <div class="field">
-          <label for="u">نام کاربری / Username</label>
+          <label for="u" data-i18n="username">Username</label>
           <div class="input-wrap">
             <span class="input-icon">👤</span>
             <input class="input" id="u" name="username" placeholder="admin" autocomplete="username" required>
           </div>
         </div>
         <div class="field">
-          <label for="p">رمز عبور / Password</label>
+          <label for="p" data-i18n="password">Password</label>
           <div class="input-wrap">
             <span class="input-icon">🔒</span>
             <input class="input" id="p" name="password" type="password" placeholder="••••••••" autocomplete="current-password" required>
@@ -399,51 +458,188 @@
         </div>
 
         <div class="row">
-          <label class="check"><input type="checkbox" id="rm"> مرا به خاطر بسپار</label>
-          <a href="#" style="text-decoration:none;opacity:.8">فراموشی رمز؟</a>
+          <label class="check"><input type="checkbox" id="rm"> <span data-i18n="remember">Remember me</span></label>
+          <a href="#" class="link" id="forgotLink" data-i18n="forgot">Forgot password?</a>
         </div>
 
-        <button class="btn" id="btn" type="submit">ورود — Enter HP-UI</button>
-
+        <button class="btn" id="btn" type="submit" data-i18n="enter">Enter — Sign In</button>
+        <div class="foot">© HAMI SMART SYSTEMS — HP-UI / HAMI PANEL • v0.4.0</div>
       </form>
-
-      <div class="foot">© HAMI SMART SYSTEMS — HP-UI / HAMI PANEL</div>
     </div>
-  </main>
+  </div>
+
+  <!-- BRAND — opposite side -->
+  <div class="brand-side">
+    <div class="brand-card">
+      <h1>HP-UI <span>HAMI PANEL — HAMI SMART SYSTEMS</span></h1>
+      <p data-i18n="brand_desc">Open-source panel, Go + React, multi-node ready. Docs on GitHub.</p>
+      <div class="brand-meta">
+        <span class="meta-pill">GPL-3.0</span>
+        <span class="meta-pill">Go • React</span>
+        <span class="meta-pill">Xray • sing-box</span>
+        <span class="meta-pill">Multi-node</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Forgot password modal -->
+<div class="modal-backdrop" id="modal">
+  <div class="modal">
+    <h3 data-i18n="forgot_title">Forgot password — how it works</h3>
+    <p data-i18n="forgot_p1">
+      HP-UI does not send password via email by default. Admin password is stored hashed on the server.
+      If you forgot it, reset from server console.
+    </p>
+    <p data-i18n="forgot_p2" style="margin-top:10px">
+      If SMTP is configured in <code style="display:inline;padding:2px 6px">/opt/hami-panel/config.yaml</code>, you can enable email reset. Otherwise use console:
+    </p>
+    <code>ssh root@your-server
+hami admin list
+hami admin reset --user admin --new-password 'YOUR_NEW_PASS'
+# or generate random:
+hami admin reset --user admin --random
+systemctl restart hami-panel
+</code>
+    <p data-i18n="forgot_p3" style="margin-top:10px">
+      For Docker: <code style="display:inline;padding:2px 6px">docker exec -it hami-panel hami admin reset --user admin</code>
+    </p>
+    <p data-i18n="forgot_p4" style="margin-top:10px">
+      After reset, login with new password. This modal is client-side only — no request is sent until you configure SMTP.
+    </p>
+    <div class="modal-actions">
+      <button class="icon-btn" id="closeModal" data-i18n="close">Close</button>
+    </div>
+  </div>
 </div>
 
 <script>
+  // i18n — default English
+  const I18N = {
+    en: {
+      login_title: "Sign in to HAMI PANEL",
+      login_sub: "Enter your admin credentials to continue.",
+      username: "Username",
+      password: "Password",
+      remember: "Remember me",
+      forgot: "Forgot password?",
+      enter: "Enter — Sign In",
+      brand_desc: "Open-source panel, Go + React, multi-node ready. Docs on GitHub.",
+      forgot_title: "Forgot password — how it works",
+      forgot_p1: "HP-UI does not send password via email by default. Admin password is stored hashed on the server. If you forgot it, reset from server console.",
+      forgot_p2: "If SMTP is configured in /opt/hami-panel/config.yaml, you can enable email reset. Otherwise use console:",
+      forgot_p3: "For Docker: docker exec -it hami-panel hami admin reset --user admin",
+      forgot_p4: "After reset, login with new password. This modal is client-side only — no request is sent until you configure SMTP.",
+      close: "Close",
+      checking: "Checking...",
+      entered: "✅ Signed in"
+    },
+    fa: {
+      login_title: "ورود به پنل حامی",
+      login_sub: "نام کاربری و رمز عبور ادمین را وارد کنید.",
+      username: "نام کاربری",
+      password: "رمز عبور",
+      remember: "مرا به خاطر بسپار",
+      forgot: "فراموشی رمز؟",
+      enter: "ورود — Enter HP-UI",
+      brand_desc: "پنل متن‌باز، Go + React، آماده چندنوده. مستندات در گیت‌هاب.",
+      forgot_title: "فراموشی رمز — نحوه کار",
+      forgot_p1: "HP-UI به‌صورت پیش‌فرض رمز را با ایمیل نمی‌فرستد. رمز ادمین به‌صورت هش روی سرور ذخیره می‌شود. اگر فراموش کردید از کنسول سرور ریست کنید.",
+      forgot_p2: "اگر SMTP در /opt/hami-panel/config.yaml تنظیم شده باشد می‌توانید ریست ایمیلی را فعال کنید. در غیر این صورت از کنسول:",
+      forgot_p3: "برای داکر: docker exec -it hami-panel hami admin reset --user admin",
+      forgot_p4: "بعد از ریست با رمز جدید وارد شوید. این پنجره فقط سمت کلاینت است و تا SMTP تنظیم نشود درخواستی ارسال نمی‌شود.",
+      close: "بستن",
+      checking: "در حال بررسی...",
+      entered: "✅ وارد شدید"
+    }
+  };
+
   const body = document.body;
-  const btns = document.querySelectorAll('.theme-btn');
-  function setTheme(t){
-    body.setAttribute('data-theme', t);
-    btns.forEach(b=>b.classList.toggle('active', b.dataset.t===t));
-    try{localStorage.setItem('hpui-theme', t)}catch(e){}
+  const themeBtn = document.getElementById('themeBtn');
+  const langBtn = document.getElementById('langBtn');
+
+  const THEMES = [
+    {id:'light', icon:'☀️', label:{en:'Light', fa:'روشن'}},
+    {id:'dark', icon:'🌙', label:{en:'Dark', fa:'تیره'}},
+    {id:'vdark', icon:'🌑', label:{en:'Darker', fa:'خیلی‌تیره'}},
+  ];
+  let themeIdx = 0;
+  function applyTheme(t){
+    const idx = THEMES.findIndex(x=>x.id===t);
+    if(idx>=0) themeIdx = idx;
+    body.setAttribute('data-theme', THEMES[themeIdx].id);
+    const cur = THEMES[themeIdx];
+    const lang = document.documentElement.lang || 'en';
+    themeBtn.textContent = `${cur.icon} ${cur.label[lang] || cur.label.en}`;
+    try{localStorage.setItem('hpui-theme', cur.id)}catch(e){}
   }
-  btns.forEach(b=>b.addEventListener('click', ()=>setTheme(b.dataset.t)));
+  function cycleTheme(){
+    themeIdx = (themeIdx+1) % THEMES.length;
+    applyTheme(THEMES[themeIdx].id);
+  }
+  themeBtn.addEventListener('click', cycleTheme);
+
+  // lang
+  let currentLang = 'en';
+  function applyLang(l){
+    currentLang = l;
+    document.documentElement.lang = l;
+    document.documentElement.dir = l==='fa' ? 'rtl' : 'ltr';
+    langBtn.textContent = l.toUpperCase();
+    const dict = I18N[l] || I18N.en;
+    document.querySelectorAll('[data-i18n]').forEach(el=>{
+      const k = el.getAttribute('data-i18n');
+      if(dict[k]) el.textContent = dict[k];
+    });
+    // update theme label
+    applyTheme(THEMES[themeIdx].id);
+    try{localStorage.setItem('hpui-lang', l)}catch(e){}
+  }
+  langBtn.addEventListener('click', ()=>{
+    applyLang(currentLang==='en' ? 'fa' : 'en');
+  });
+
+  // init from storage — default English
   try{
-    const saved = localStorage.getItem('hpui-theme');
-    if(saved) setTheme(saved);
-  }catch(e){}
-  // demo login handler — will be replaced by real API
+    const savedTheme = localStorage.getItem('hpui-theme');
+    if(savedTheme) applyTheme(savedTheme); else applyTheme('light');
+    const savedLang = localStorage.getItem('hpui-lang');
+    if(savedLang) applyLang(savedLang); else applyLang('en');
+  }catch(e){
+    applyTheme('light'); applyLang('en');
+  }
+
+  // forgot modal
+  const modal = document.getElementById('modal');
+  document.getElementById('forgotLink').addEventListener('click', (e)=>{
+    e.preventDefault();
+    modal.classList.add('open');
+  });
+  document.getElementById('closeModal').addEventListener('click', ()=>modal.classList.remove('open'));
+  modal.addEventListener('click', (e)=>{ if(e.target===modal) modal.classList.remove('open'); });
+
+  // login
   document.getElementById('f').addEventListener('submit', async ()=>{
     const u = document.getElementById('u').value.trim();
     const p = document.getElementById('p').value;
     const btn = document.getElementById('btn');
-    btn.textContent = 'در حال بررسی...';
+    const dict = I18N[currentLang] || I18N.en;
+    btn.textContent = dict.checking;
     btn.disabled = true;
     try{
       const r = await fetch('/api/login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:u,password:p})});
       const j = await r.json().catch(()=>({}));
       if(r.ok){
-        btn.textContent = '✅ وارد شدید';
+        btn.textContent = dict.entered;
+        // redirect if provided
+        if(j.redirect) location.href = j.redirect; else location.href = '/';
       }else{
-        alert(j.error || 'ورود پیاده‌سازی نشده — این فقط پیش‌نمایش HP-UI است');
-        btn.textContent = 'ورود — Enter HP-UI';
+        alert(j.error || (currentLang==='fa' ? 'ورود ناموفق' : 'Login failed'));
+        btn.textContent = dict.enter;
       }
     }catch(e){
-      alert('اتصال به سرور برقرار نیست — این فقط پیش‌نمایش UI است');
-      btn.textContent = 'ورود — Enter HP-UI';
+      alert(currentLang==='fa' ? 'اتصال به سرور برقرار نیست — این فقط پیش‌نمایش UI است' : 'Cannot connect to server — this is UI preview only');
+      btn.textContent = dict.enter;
     }finally{
       btn.disabled = false;
     }
