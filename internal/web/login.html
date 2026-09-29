@@ -249,13 +249,17 @@
     transition:border .15s, box-shadow .15s, background .15s;
   }
   body[data-theme="light"] .input{
-    background:#FBFEF9;
-    border-color:#D6E4CD;
+    background:#9DC183;
+    border-color:#7AAE64;
     color:var(--light-text);
   }
+  body[data-theme="light"] .input::placeholder{
+    color:rgba(27,46,26,.55);
+  }
   body[data-theme="light"] .input:focus{
-    border-color:#0B6623;
-    box-shadow:0 0 0 4px rgba(157,193,131,.32);
+    background:#A9C99A;
+    border-color:#043927;
+    box-shadow:0 0 0 4px rgba(4,57,39,.22);
   }
   body[data-theme="dark"] .input{
     background:rgba(0,0,0,.22);
