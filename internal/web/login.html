@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP-UI — HAMI PANEL</title>
+<style>
+  :root{
+    --light-bg:#F6FAF2;
+    --light-card:#FFFFFF;
+    --light-accent:#9DC183;
+    --light-accent-2:#7AAE64;
+    --light-text:#1E2A1A;
+    --light-muted:#5A6E54;
+
+    --dark-bg:#0B6623;
+    --dark-card:#0E7A2A;
+    --dark-accent:#9DC183;
+    --dark-text:#EAF6E3;
+    --dark-muted:#A8C9A0;
+
+    --vdark-bg:#043927;
+    --vdark-card:#0A4D2E;
+    --vdark-accent:#9DC183;
+    --vdark-text:#DFF0D8;
+    --vdark-muted:#8BB88A;
+
+    --radius:18px;
+    --shadow:0 20px 60px rgba(0,0,0,.18);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family: Vazirmatn, Tahoma, "Segoe UI", sans-serif;
+    min-height:100vh;
+    display:flex;
+    background:var(--light-bg);
+    color:var(--light-text);
+    transition:background .3s,color .3s;
+  }
+  /* themes */
+  body[data-theme="light"]{background:var(--light-bg);color:var(--light-text)}
+  body[data-theme="dark"]{background:var(--dark-bg);color:var(--dark-text)}
+  body[data-theme="vdark"]{background:var(--vdark-bg);color:var(--vdark-text)}
+
+  .shell{
+    display:flex;
+    width:100%;
+    min-height:100vh;
+  }
+  /* left branding — completely different from 3X-UI centered card */
+  .brand{
+    width:42%;
+    min-width:320px;
+    padding:38px 36px;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+    position:relative;
+    overflow:hidden;
+  }
+  body[data-theme="light"] .brand{
+    background:linear-gradient(160deg, #9DC183 0%, #7AAE64 45%, #0B6623 100%);
+    color:#fff;
+  }
+  body[data-theme="dark"] .brand{
+    background:linear-gradient(160deg, #0B6623 0%, #0E7A2A 55%, #043927 100%);
+    color:var(--dark-text);
+  }
+  body[data-theme="vdark"] .brand{
+    background:linear-gradient(160deg, #043927 0%, #0B6623 85%, #022A1C 100%);
+    color:var(--vdark-text);
+  }
+  .brand::before{
+    content:"";
+    position:absolute;
+    inset:-20%;
+    background:
+      radial-gradient(600px 400px at 20% 15%, rgba(255,255,255,.18), transparent 60%),
+      radial-gradient(500px 300px at 80% 85%, rgba(157,193,131,.35), transparent 70%);
+    pointer-events:none;
+  }
+  .brand > *{position:relative;z-index:1}
+  .topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .logo{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    font-weight:900;
+    letter-spacing:.5px;
+  }
+  .logo-mark{
+    width:44px;height:44px;
+    border-radius:12px;
+    background:#fff;
+    color:#0B6623;
+    display:grid;
+    place-items:center;
+    font-size:22px;
+    font-weight:900;
+    box-shadow:0 8px 24px rgba(0,0,0,.18);
+  }
+  .logo-text b{display:block;font-size:18px;line-height:1}
+  .logo-text span{display:block;font-size:11px;opacity:.9;letter-spacing:2px;margin-top:2px}
+  .theme-switch{
+    display:flex;
+    gap:8px;
+    background:rgba(0,0,0,.18);
+    padding:6px;
+    border-radius:999px;
+    backdrop-filter:blur(8px);
+  }
+  .theme-btn{
+    width:32px;height:32px;
+    border-radius:50%;
+    border:2px solid rgba(255,255,255,.7);
+    cursor:pointer;
+    display:grid;
+    place-items:center;
+    font-size:14px;
+    transition:transform .15s, box-shadow .15s;
+  }
+  .theme-btn:hover{transform:scale(1.08)}
+  .theme-btn.active{box-shadow:0 0 0 3px rgba(255,255,255,.9)}
+  .theme-btn[data-t="light"]{background:#9DC183}
+  .theme-btn[data-t="dark"]{background:#0B6623}
+  .theme-btn[data-t="vdark"]{background:#043927}
+
+  .brand-main{margin-top:60px}
+  .brand-main h1{
+    font-size:38px;
+    line-height:1.1;
+    font-weight:900;
+    letter-spacing:-.5px;
+  }
+  .brand-main h1 span{
+    display:block;
+    font-size:16px;
+    font-weight:600;
+    opacity:.9;
+    margin-top:10px;
+    letter-spacing:.3px;
+  }
+  .brand-main p{
+    margin-top:18px;
+    font-size:14px;
+    line-height:1.9;
+    opacity:.92;
+    max-width:36ch;
+  }
+  .brand-features{
+    margin-top:28px;
+    display:grid;
+    gap:12px;
+  }
+  .feat{
+    display:flex;
+    gap:10px;
+    align-items:flex-start;
+    font-size:13px;
+    line-height:1.7;
+    background:rgba(255,255,255,.12);
+    border:1px solid rgba(255,255,255,.18);
+    padding:10px 12px;
+    border-radius:12px;
+    backdrop-filter:blur(6px);
+  }
+  .feat i{
+    width:26px;height:26px;
+    border-radius:8px;
+    background:#fff;
+    color:#0B6623;
+    display:grid;
+    place-items:center;
+    font-style:normal;
+    font-weight:800;
+    flex-shrink:0;
+  }
+  .brand-foot{
+    font-size:11px;
+    opacity:.8;
+    letter-spacing:.6px;
+  }
+
+  /* right form — not a centered card like 3X-UI */
+  .panel{
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:28px;
+  }
+  .form-wrap{
+    width:100%;
+    max-width:420px;
+  }
+  body[data-theme="light"] .form-wrap{
+    background:var(--light-card);
+    border:1px solid #E6EEDF;
+    border-radius:var(--radius);
+    padding:28px;
+    box-shadow:var(--shadow);
+  }
+  body[data-theme="dark"] .form-wrap{
+    background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.14);
+    border-radius:var(--radius);
+    padding:28px;
+    backdrop-filter:blur(12px);
+  }
+  body[data-theme="vdark"] .form-wrap{
+    background:rgba(255,255,255,.05);
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:var(--radius);
+    padding:28px;
+    backdrop-filter:blur(14px);
+  }
+  .form-head{margin-bottom:22px}
+  .form-head h2{
+    font-size:22px;
+    font-weight:800;
+  }
+  .form-head p{
+    margin-top:6px;
+    font-size:13px;
+    opacity:.75;
+    line-height:1.7;
+  }
+  .field{margin-bottom:16px}
+  .field label{
+    display:block;
+    font-size:12px;
+    font-weight:700;
+    margin-bottom:7px;
+    opacity:.9;
+  }
+  .input{
+    width:100%;
+    height:46px;
+    border-radius:12px;
+    border:1px solid;
+    padding:0 14px 0 42px;
+    font-size:14px;
+    font-family:inherit;
+    outline:none;
+    transition:border .15s, box-shadow .15s, background .15s;
+  }
+  body[data-theme="light"] .input{
+    background:#FBFEF9;
+    border-color:#D6E4CD;
+    color:var(--light-text);
+  }
+  body[data-theme="light"] .input:focus{
+    border-color:#0B6623;
+    box-shadow:0 0 0 4px rgba(157,193,131,.35);
+  }
+  body[data-theme="dark"] .input{
+    background:rgba(0,0,0,.22);
+    border-color:rgba(255,255,255,.18);
+    color:var(--dark-text);
+  }
+  body[data-theme="dark"] .input:focus{
+    border-color:#9DC183;
+    box-shadow:0 0 0 4px rgba(157,193,131,.25);
+  }
+  body[data-theme="vdark"] .input{
+    background:rgba(0,0,0,.32);
+    border-color:rgba(255,255,255,.14);
+    color:var(--vdark-text);
+  }
+  body[data-theme="vdark"] .input:focus{
+    border-color:#9DC183;
+    box-shadow:0 0 0 4px rgba(157,193,131,.2);
+  }
+  .input-wrap{position:relative}
+  .input-icon{
+    position:absolute;
+    left:12px;
+    top:50%;
+    transform:translateY(-50%);
+    width:22px;height:22px;
+    opacity:.7;
+    display:grid;
+    place-items:center;
+    font-size:14px;
+  }
+  .row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin:10px 0 18px;
+    font-size:12px;
+  }
+  .check{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    cursor:pointer;
+    user-select:none;
+  }
+  .check input{accent-color:#0B6623}
+  .btn{
+    width:100%;
+    height:48px;
+    border-radius:12px;
+    border:0;
+    cursor:pointer;
+    font-family:inherit;
+    font-size:15px;
+    font-weight:800;
+    letter-spacing:.3px;
+    color:#fff;
+    background:linear-gradient(135deg, #0B6623 0%, #043927 100%);
+    box-shadow:0 12px 28px rgba(11,102,35,.35);
+    transition:transform .12s, box-shadow .12s, filter .15s;
+  }
+  .btn:hover{transform:translateY(-1px);box-shadow:0 16px 32px rgba(11,102,35,.42);filter:brightness(1.05)}
+  .btn:active{transform:translateY(0)}
+  .hint{
+    margin-top:14px;
+    font-size:11px;
+    line-height:1.7;
+    opacity:.7;
+    text-align:center;
+  }
+  .foot{
+    margin-top:22px;
+    text-align:center;
+    font-size:11px;
+    opacity:.6;
+    letter-spacing:.4px;
+  }
+
+  @media (max-width:900px){
+    .shell{flex-direction:column}
+    .brand{width:100%;min-height:38vh;padding:22px 20px}
+    .brand-main{margin-top:22px}
+    .brand-main h1{font-size:30px}
+    .panel{padding:18px}
+  }
+</style>
+</head>
+<body data-theme="light">
+<div class="shell">
+  <!-- BRAND — left, not centered like 3X-UI -->
+  <aside class="brand">
+    <div class="topbar">
+      <div class="logo">
+        <div class="logo-mark">H</div>
+        <div class="logo-text"><b>HAMI PANEL</b><span>HP-UI</span></div>
+      </div>
+      <div class="theme-switch" title="تم">
+        <button class="theme-btn active" data-t="light" aria-label="روشن">☀️</button>
+        <button class="theme-btn" data-t="dark" aria-label="تیره">🌙</button>
+        <button class="theme-btn" data-t="vdark" aria-label="خیلی تیره">🌑</button>
+      </div>
+    </div>
+
+    <div class="brand-main">
+      <h1>پنل حامی
+        <span>HP-UI — HAMI SMART SYSTEMS</span>
+      </h1>
+      <p>مدیریت اینباند، کاربر، ساب چندقالبه، نود و هسته‌های Xray و sing-box — با اینباند خصوصی ادمین-فقط و طراحی کاملاً اختصاصی.</p>
+
+      <div class="brand-features">
+        <div class="feat"><i>◐</i><div><b>۱۱ قالب آماده</b> — VLESS Reality / XHTTP / gRPC / Hysteria2 / TUIC / AnyTLS</div></div>
+        <div class="feat"><i>✦</i><div><b>Private Inbound</b> — اینباند اختصاصی فقط برای ادمین، حذف از توزیع خودکار</div></div>
+        <div class="feat"><i>⚡</i><div><b>ساب هوشمند</b> — v2ray / Clash / sing-box / Shadowrocket + سلامت نود</div></div>
+      </div>
+    </div>
+
+    <div class="brand-foot">HAMI SMART SYSTEMS — hp-ui • v0.4.0</div>
+  </aside>
+
+  <!-- FORM — right, not Hello/Welcome card -->
+  <main class="panel">
+    <div class="form-wrap">
+      <div class="form-head">
+        <h2>ورود به پنل حامی</h2>
+        <p>HAMI PANEL Login — نام کاربری و رمز عبور ادمین را وارد کنید. این صفحه هیچ شباهتی به 3X-UI ندارد.</p>
+      </div>
+
+      <form id="f" method="post" action="/api/login" onsubmit="return false">
+        <div class="field">
+          <label for="u">نام کاربری / Username</label>
+          <div class="input-wrap">
+            <span class="input-icon">👤</span>
+            <input class="input" id="u" name="username" placeholder="admin" autocomplete="username" required>
+          </div>
+        </div>
+        <div class="field">
+          <label for="p">رمز عبور / Password</label>
+          <div class="input-wrap">
+            <span class="input-icon">🔒</span>
+            <input class="input" id="p" name="password" type="password" placeholder="••••••••" autocomplete="current-password" required>
+          </div>
+        </div>
+
+        <div class="row">
+          <label class="check"><input type="checkbox" id="rm"> مرا به خاطر بسپار</label>
+          <a href="#" style="text-decoration:none;opacity:.8">فراموشی رمز؟</a>
+        </div>
+
+        <button class="btn" id="btn" type="submit">ورود — Enter HP-UI</button>
+        <div class="hint">رنگ‌ها: روشن #9DC183 / تیره #0B6623 / خیلی تیره #043927 — برندینگ HP-UI، نه 3X-UI.</div>
+      </form>
+
+      <div class="foot">© HAMI SMART SYSTEMS — HP-UI / HAMI PANEL</div>
+    </div>
+  </main>
+</div>
+
+<script>
+  const body = document.body;
+  const btns = document.querySelectorAll('.theme-btn');
+  function setTheme(t){
+    body.setAttribute('data-theme', t);
+    btns.forEach(b=>b.classList.toggle('active', b.dataset.t===t));
+    try{localStorage.setItem('hpui-theme', t)}catch(e){}
+  }
+  btns.forEach(b=>b.addEventListener('click', ()=>setTheme(b.dataset.t)));
+  try{
+    const saved = localStorage.getItem('hpui-theme');
+    if(saved) setTheme(saved);
+  }catch(e){}
+  // demo login handler — will be replaced by real API
+  document.getElementById('f').addEventListener('submit', async ()=>{
+    const u = document.getElementById('u').value.trim();
+    const p = document.getElementById('p').value;
+    const btn = document.getElementById('btn');
+    btn.textContent = 'در حال بررسی...';
+    btn.disabled = true;
+    try{
+      const r = await fetch('/api/login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:u,password:p})});
+      const j = await r.json().catch(()=>({}));
+      if(r.ok){
+        btn.textContent = '✅ وارد شدید';
+      }else{
+        alert(j.error || 'ورود پیاده‌سازی نشده — این فقط پیش‌نمایش HP-UI است');
+        btn.textContent = 'ورود — Enter HP-UI';
+      }
+    }catch(e){
+      alert('اتصال به سرور برقرار نیست — این فقط پیش‌نمایش UI است');
+      btn.textContent = 'ورود — Enter HP-UI';
+    }finally{
+      btn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

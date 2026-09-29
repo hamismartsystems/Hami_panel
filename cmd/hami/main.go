@@ -57,6 +57,8 @@ func main() {
 		os.Exit(templateCmd(os.Args[2:]))
 	case "reality":
 		os.Exit(realityCmd(os.Args[2:]))
+	case "web", "hpui", "hp-ui":
+		os.Exit(webCmd(os.Args[2:]))
 	case "-h", "--help", "help":
 		usage()
 	default:

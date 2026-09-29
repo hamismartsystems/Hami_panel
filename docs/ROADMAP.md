@@ -45,6 +45,12 @@
 - [x] چرخشِ ShortID و کلید (`hami reality rotate -db panel.db -id ID [-new-sid] [-new-key]` + `hami reality keygen` — X25519 با ecdh، ShortID هگز تصادفی)
 - [x] اینباندِ خصوصی/اختصاصی (ادمین-فقط) — `is_private`، `hami inbound add --private`، حذف از `LeastLoadedInbound` و توزیع auto، لیست با ستون PRIVATE، فقط کلاینت‌های متصل به آن اینباند لینک می‌گیرند (جایگزین امن برای دستکاری ساب‌لینک)
 
+## مرحلهٔ ۴.۵ — پنل وب HP-UI (در حال انجام)
+- [x] صفحهٔ ورود اختصاصی HP-UI / HAMI PANEL — طراحی کاملاً متفاوت از 3X-UI، Split layout (برندینگ چپ، فرم راست)، تم‌های روشن #9DC183 / تیره #0B6623 / خیلی تیره #043927، لوگو H، بدون Hello/Welcome
+- [x] سرور وب `hami web serve -db panel.db -addr :8080` — مسیرهای /hp-ui/login و /sub/{token} و /sub/{token}/status
+- [ ] احراز هویت ادمین (سشن، JWT، ذخیره در دیتابیس)
+- [ ] داشبورد اینباند/کاربر/نود/لاگ
+
 ## مرحلهٔ ۵ — فروش و خودکارسازی
 - [ ] بات تلگرام (ساخت کاربر، تمدید، وضعیت)
 - [ ] اتصال به درگاه/کیف پول و تمدیدِ خودکار
