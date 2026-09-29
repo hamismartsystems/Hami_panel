@@ -43,6 +43,7 @@
 - [x] قالب‌های آماده برای VLESS+Reality، XHTTP، HTTPUpgrade، gRPC + sing-box (`hami template list` / `apply` — ۱۱ قالب: ۷ تا VLESS + ۴ تا sing-box: hysteria2-tls/tuic-tls/anytls-tls/anytls-reality)
 - [x] بررسیِ خودکارِ سلامتِ مقصدِ Reality (dest/SNI) و اثرانگشتِ uTLS (`hami reality check -dest HOST:PORT -sni SNI` — TLS handshake + VerifyHostname، تست با cert خودامضا)
 - [x] چرخشِ ShortID و کلید (`hami reality rotate -db panel.db -id ID [-new-sid] [-new-key]` + `hami reality keygen` — X25519 با ecdh، ShortID هگز تصادفی)
+- [x] اینباندِ خصوصی/اختصاصی (ادمین-فقط) — `is_private`، `hami inbound add --private`، حذف از `LeastLoadedInbound` و توزیع auto، لیست با ستون PRIVATE، فقط کلاینت‌های متصل به آن اینباند لینک می‌گیرند (جایگزین امن برای دستکاری ساب‌لینک)
 
 ## مرحلهٔ ۵ — فروش و خودکارسازی
 - [ ] بات تلگرام (ساخت کاربر، تمدید، وضعیت)

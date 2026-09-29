@@ -158,6 +158,7 @@ func (s *Store) LeastLoadedInbound() (*Inbound, error) {
 		FROM inbounds i
 		LEFT JOIN clients c ON c.inbound_id = i.id
 		WHERE i.enable = 1
+		  AND i.is_private = 0
 		  AND (i.node_id = 0 OR COALESCE(
 		      (SELECT status FROM nodes WHERE id = i.node_id), 'unknown') != 'down')
 		GROUP BY i.id
@@ -184,9 +185,10 @@ func (s *Store) LeastLoadedInbound() (*Inbound, error) {
 
 // FirstEnabledInboundOnNode returns the lowest-id enabled inbound of a node,
 // used by `user create -node NAME` (explicit manual distribution).
+// Private inbounds are excluded from auto-pick — admin must use -inbound ID.
 func (s *Store) FirstEnabledInboundOnNode(nodeID int64) (*Inbound, error) {
 	rows, err := s.db.Query(
-		`SELECT id FROM inbounds WHERE node_id=? AND enable=1 ORDER BY id ASC LIMIT 1`, nodeID)
+		`SELECT id FROM inbounds WHERE node_id=? AND enable=1 AND is_private=0 ORDER BY id ASC LIMIT 1`, nodeID)
 	if err != nil {
 		return nil, err
 	}

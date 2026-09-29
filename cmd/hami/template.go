@@ -62,6 +62,7 @@ func templateApply(args []string) int {
 	obfsPassword := fs.String("obfs-password", "", "hysteria2 obfs password")
 	alpn := fs.String("alpn", "", "alpn for sing-box")
 	cc := fs.String("cc", "", "congestion control for tuic")
+	isPrivate := fs.Bool("private", false, "mark as private/dedicated (admin-only)")
 	fs.SetOutput(os.Stderr)
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -132,6 +133,11 @@ func templateApply(args []string) int {
 	if *cc != "" {
 		ccV = *cc
 	}
+	isPriv := *isPrivate
+	// sing-box dedicated templates are private by default if user wants, but explicit flag wins
+	if tmpl.Protocol == "hysteria2" || tmpl.Protocol == "tuic" || tmpl.Protocol == "anytls" {
+		// keep as set by flag
+	}
 
 	in := &store.Inbound{
 		NodeID:            nodeID,
@@ -153,6 +159,7 @@ func templateApply(args []string) int {
 		ObfsPassword:      obfsP,
 		Alpn:              alpnV,
 		CongestionControl: ccV,
+		IsPrivate:         isPriv,
 	}
 	if err := st.CreateInbound(in); err != nil {
 		fmt.Fprintf(os.Stderr, "create: %v\n", err)

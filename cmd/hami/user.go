@@ -519,7 +519,7 @@ func userInbounds(args []string) int {
 			nodeNames[n.ID] = n.Name
 		}
 	}
-	fmt.Printf("%-4s %-20s %-8s %-6s %-14s %-8s %-12s %s\n", "ID", "REMARK", "PROTO", "PORT", "SECURITY", "ENABLED", "NODE", "HOST")
+	fmt.Printf("%-4s %-20s %-8s %-6s %-14s %-8s %-8s %-12s %s\n", "ID", "REMARK", "PROTO", "PORT", "SECURITY", "ENABLED", "PRIVATE", "NODE", "HOST")
 	for _, in := range ins {
 		nodeName := "-"
 		if in.NodeID != 0 {
@@ -528,7 +528,11 @@ func userInbounds(args []string) int {
 				nodeName = fmt.Sprintf("#%d", in.NodeID)
 			}
 		}
-		fmt.Printf("%-4d %-20s %-8s %-6d %-14s %-8v %-12s %s\n", in.ID, in.Remark, in.Protocol, in.Port, in.Security, in.Enable, nodeName, in.Host)
+		priv := "-"
+		if in.IsPrivate {
+			priv = "yes"
+		}
+		fmt.Printf("%-4d %-20s %-8s %-6d %-14s %-8v %-8s %-12s %s\n", in.ID, in.Remark, in.Protocol, in.Port, in.Security, in.Enable, priv, nodeName, in.Host)
 	}
 	return 0
 }
