@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/hamismartsystems/hami_panel/internal/store"
@@ -70,9 +71,6 @@ func LoadXrayConfig(path string) (*XrayConfig, error) {
 	return &c, nil
 }
 
-// MarzbanXray is set by the caller when a config file was supplied.
-var MarzbanXray *XrayConfig
-
 func (m *marzbanSource) Read(db *sql.DB, opt Options) (*Snapshot, error) {
 	snap := &Snapshot{}
 
@@ -85,11 +83,22 @@ func (m *marzbanSource) Read(db *sql.DB, opt Options) (*Snapshot, error) {
 		return nil, err
 	}
 
+	// Marzban keeps xray_config.json beside its database, so look there
+	// before giving up and asking the operator for it.
+	xray := opt.XrayConfig
+	if xray == nil && opt.sourceDir != "" {
+		if cfg, err := LoadXrayConfig(filepath.Join(opt.sourceDir, "xray_config.json")); err == nil {
+			xray = cfg
+			snap.Warnings = append(snap.Warnings,
+				"used the xray config found next to the database for the inbound definitions")
+		}
+	}
+
 	// Build one HAMI inbound per Marzban inbound tag.
 	defs := map[string]store.Inbound{}
 	secs := map[string]store.InboundSecret{}
-	if MarzbanXray != nil {
-		for _, x := range MarzbanXray.Inbounds {
+	if xray != nil {
+		for _, x := range xray.Inbounds {
 			proto := strings.ToLower(x.Protocol)
 			if !supportedProtocol(proto) {
 				snap.Skipped = append(snap.Skipped, Skip{
@@ -103,6 +112,8 @@ func (m *marzbanSource) Read(db *sql.DB, opt Options) (*Snapshot, error) {
 				snap.Warnings = append(snap.Warnings, "tag "+x.Tag+": "+w)
 			}
 			in := store.Inbound{
+				// The tag is the inbound's real name. A host's remark is a
+				// link label template, not a name.
 				Remark: x.Tag, Protocol: proto, Port: x.Port,
 				Transport: st.transport, Security: st.security, SNI: st.sni,
 				PublicKey: st.publicKey, ShortID: st.shortID, SpiderX: st.spiderX,
@@ -119,29 +130,41 @@ func (m *marzbanSource) Read(db *sql.DB, opt Options) (*Snapshot, error) {
 		}
 	}
 
-	// Host rows override what customers are told to dial.
+	// Host rows override what customers are told to dial. Marzban fills
+	// these in at link-generation time, so anything still holding a
+	// placeholder like {SERVER_IP} is a template, not an address, and
+	// copying it verbatim would hand customers links that cannot connect.
 	for tag, h := range hosts {
 		in, ok := defs[tag]
 		if !ok {
 			continue
 		}
 		if h.address != "" {
-			in.Host = h.address
+			if hasPlaceholder(h.address) {
+				snap.Warnings = append(snap.Warnings, fmt.Sprintf(
+					"tag %s: marzban stores the address as the template %q; "+
+						"set the address yourself with -host", tag, h.address))
+			} else {
+				in.Host = h.address
+			}
 		}
 		if h.port > 0 {
 			in.Port = h.port
 		}
-		if h.sni != "" {
+		if h.sni != "" && !hasPlaceholder(h.sni) {
 			in.SNI = h.sni
 		}
-		if h.path != "" {
+		if h.path != "" && !hasPlaceholder(h.path) {
 			in.Path = h.path
 		}
 		if h.fingerprint != "" {
 			in.Fingerprint = h.fingerprint
 		}
-		if h.remark != "" {
-			in.Remark = h.remark
+		if h.extra > 0 {
+			snap.Warnings = append(snap.Warnings, fmt.Sprintf(
+				"tag %s: marzban has %d addresses for this inbound, kept %q — "+
+					"HAMI stores one address per inbound",
+				tag, h.extra+1, in.Host))
 		}
 		defs[tag] = in
 	}
@@ -155,7 +178,7 @@ func (m *marzbanSource) Read(db *sql.DB, opt Options) (*Snapshot, error) {
 	}
 
 	// Anything the database references but the config did not explain.
-	if MarzbanXray == nil {
+	if xray == nil {
 		for _, tag := range tags {
 			snap.Skipped = append(snap.Skipped, Skip{
 				What: "inbound", Ref: "tag " + tag,
@@ -199,6 +222,14 @@ func (m *marzbanSource) Read(db *sql.DB, opt Options) (*Snapshot, error) {
 type marzbanHost struct {
 	remark, address, sni, path, fingerprint string
 	port                                    int
+	extra                                   int // further hosts for the same tag
+}
+
+// hasPlaceholder reports whether a marzban field is still a template.
+// Marzban substitutes {SERVER_IP}, {USERNAME} and friends when it builds a
+// link, so an unsubstituted one is not a usable value.
+func hasPlaceholder(v string) bool {
+	return strings.ContainsRune(v, '{') && strings.ContainsRune(v, '}')
 }
 
 func (m *marzbanSource) readHosts(db *sql.DB) (map[string]marzbanHost, error) {
@@ -222,9 +253,12 @@ func (m *marzbanSource) readHosts(db *sql.DB) (map[string]marzbanHost, error) {
 			return nil, err
 		}
 		h.port = int(port.Int64)
-		if _, seen := out[tag]; !seen { // first host wins, like marzban's own order
-			out[tag] = h
+		if prev, seen := out[tag]; seen {
+			prev.extra++
+			out[tag] = prev
+			continue
 		}
+		out[tag] = h // the first host wins, matching marzban's own ordering
 	}
 	return out, rows.Err()
 }

@@ -208,8 +208,7 @@ func readSource(sess *importSession, opt importer.Options) (*importer.Snapshot, 
 		if err != nil {
 			return nil, "", err
 		}
-		importer.MarzbanXray = cfg
-		defer func() { importer.MarzbanXray = nil }()
+		opt.XrayConfig = cfg
 	}
 	src, err := importer.Open(sess.path, "")
 	if err != nil {

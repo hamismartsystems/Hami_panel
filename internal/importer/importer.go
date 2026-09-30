@@ -84,6 +84,13 @@ type Options struct {
 	// panel is reachable at the same address, existing customer links keep
 	// working and nobody has to be told to re-add anything.
 	KeepSubTokens bool
+	// XrayConfig carries marzban's inbound definitions, which live in a
+	// file rather than its database. Left nil, the reader looks for
+	// xray_config.json next to the database, which is where marzban puts
+	// it; that is one less thing for an operator to know.
+	XrayConfig *XrayConfig
+	// sourceDir is where the source database sits, filled in by Read.
+	sourceDir string
 	// Now is injected by tests.
 	Now func() time.Time
 }
@@ -244,6 +251,7 @@ func Open(path string, force Kind) (*Opened, error) {
 
 // Read produces the snapshot.
 func (o *Opened) Read(opt Options) (*Snapshot, error) {
+	opt.sourceDir = filepath.Dir(o.Original)
 	snap, err := o.Source.Read(o.DB, opt)
 	if err != nil {
 		return nil, err

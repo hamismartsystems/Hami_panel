@@ -492,7 +492,6 @@ func marzbanDB(t *testing.T) string {
 }
 
 func TestMarzbanWithoutTheXrayConfigExplainsItself(t *testing.T) {
-	MarzbanXray = nil
 	snap := readSnapshot(t, marzbanDB(t), Options{})
 	if snap.Kind != KindMarzban {
 		t.Fatalf("kind = %q", snap.Kind)
@@ -516,10 +515,7 @@ func TestMarzbanWithTheXrayConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	MarzbanXray = loaded
-	t.Cleanup(func() { MarzbanXray = nil })
-
-	snap := readSnapshot(t, marzbanDB(t), Options{})
+	snap := readSnapshot(t, marzbanDB(t), Options{XrayConfig: loaded})
 	if len(snap.Inbounds) != 1 {
 		t.Fatalf("got %d inbounds (%+v)", len(snap.Inbounds), snap.Skipped)
 	}
@@ -564,9 +560,6 @@ func TestMarzbanExclusionsAreHonoured(t *testing.T) {
 		t.Fatal(err)
 	}
 	loaded, _ := LoadXrayConfig(cfgPath)
-	MarzbanXray = loaded
-	t.Cleanup(func() { MarzbanXray = nil })
-
 	path := marzbanDB(t)
 	db, _ := sql.Open("sqlite", "file:"+path)
 	if _, err := db.Exec(
@@ -575,7 +568,7 @@ func TestMarzbanExclusionsAreHonoured(t *testing.T) {
 	}
 	db.Close()
 
-	snap := readSnapshot(t, path, Options{})
+	snap := readSnapshot(t, path, Options{XrayConfig: loaded})
 	for _, c := range snap.Inbounds[0].Clients {
 		if c.Email == "sara" {
 			t.Error("sara was excluded from this inbound but got imported onto it")
@@ -635,4 +628,79 @@ func hasSkip(s *Snapshot, substr string) bool {
 		}
 	}
 	return false
+}
+
+// Marzban puts xray_config.json next to its database. Finding it there is
+// the difference between an import that works and one that asks the
+// operator for a file path they have no reason to know.
+func TestMarzbanFindsItsXrayConfigNextToTheDatabase(t *testing.T) {
+	path := marzbanDB(t)
+	cfg := fmt.Sprintf(`{"inbounds":[{"tag":"VLESS_REALITY","protocol":"vless",
+		"port":8443,"streamSettings":%s}]}`, realityStream)
+	if err := os.WriteFile(filepath.Join(filepath.Dir(path), "xray_config.json"),
+		[]byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	snap := readSnapshot(t, path, Options{}) // no config passed in
+	if len(snap.Inbounds) != 1 {
+		t.Fatalf("got %d inbounds; the neighbouring config was not used (%+v)",
+			len(snap.Inbounds), snap.Skipped)
+	}
+	if !hasWarning(snap, "found next to the database") {
+		t.Errorf("using a file nobody asked for must be reported, got %v", snap.Warnings)
+	}
+	if len(snap.Inbounds[0].Clients) != 2 {
+		t.Errorf("clients = %d", len(snap.Inbounds[0].Clients))
+	}
+}
+
+// Marzban stores {SERVER_IP} and friends and substitutes them when it
+// builds a link. Copying one verbatim would hand customers a link that
+// cannot connect, so it must be refused, not imported.
+func TestMarzbanPlaceholderAddressIsNotTakenLiterally(t *testing.T) {
+	path := newSourceDB(t,
+		`CREATE TABLE users (id integer primary key, username text, status text,
+			used_traffic integer, data_limit integer, expire integer)`,
+		`CREATE TABLE proxies (id integer primary key, user_id integer, type text, settings text)`,
+		`CREATE TABLE inbounds (id integer primary key, tag text)`,
+		`CREATE TABLE hosts (id integer primary key, remark text, address text, port integer,
+			path text, sni text, fingerprint text, inbound_tag text)`,
+		`INSERT INTO users VALUES (1,'sara','active',0,0,NULL)`,
+		`INSERT INTO proxies VALUES (1,1,'VLESS','{"id":"uuid-sara"}')`,
+		`INSERT INTO inbounds VALUES (1,'VLESS_REALITY')`,
+		`INSERT INTO hosts VALUES
+			(1,'🚀 Marz ({USERNAME})','{SERVER_IP}',0,'','','','VLESS_REALITY'),
+			(2,'second','b.example.com',0,'','','','VLESS_REALITY')`,
+	)
+	cfg := fmt.Sprintf(`{"inbounds":[{"tag":"VLESS_REALITY","protocol":"vless",
+		"port":8443,"streamSettings":%s}]}`, realityStream)
+	cfgPath := filepath.Join(filepath.Dir(path), "xray_config.json")
+	if err := os.WriteFile(cfgPath, []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	snap := readSnapshot(t, path, Options{})
+	if len(snap.Inbounds) != 0 {
+		t.Errorf("imported an inbound whose address is a template: %q",
+			snap.Inbounds[0].Inbound.Host)
+	}
+	if !hasWarning(snap, "{SERVER_IP}") {
+		t.Errorf("the template address must be called out, got %v", snap.Warnings)
+	}
+	if !hasSkip(snap, "-host") {
+		t.Errorf("the operator must be told how to fix it, got %+v", snap.Skipped)
+	}
+	if !hasWarning(snap, "2 addresses") {
+		t.Errorf("having several addresses must be reported, got %v", snap.Warnings)
+	}
+
+	// with an address supplied, the same panel imports cleanly
+	snap = readSnapshot(t, path, Options{Host: "vpn.example.com"})
+	if len(snap.Inbounds) != 1 {
+		t.Fatalf("got %d inbounds with -host given", len(snap.Inbounds))
+	}
+	if got := snap.Inbounds[0].Inbound.Remark; got != "VLESS_REALITY" {
+		t.Errorf("remark = %q; the tag is the name, not the link label template", got)
+	}
 }

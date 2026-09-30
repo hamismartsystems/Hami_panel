@@ -36,6 +36,9 @@ Serves:
 
 Create the first operator with:
   hami admin create -db panel.db -user NAME
+
+  -tls-cert FILE -tls-key FILE   serve https and mark the session cookie
+                                 Secure; both flags go together
 `)
 }
 
@@ -44,6 +47,8 @@ func webServe(args []string) int {
 	dbPath := fs.String("db", "", "")
 	addr := fs.String("addr", ":8080", "")
 	baseURL := fs.String("base-url", "", "")
+	certFile := fs.String("tls-cert", "", "")
+	keyFile := fs.String("tls-key", "", "")
 	fs.SetOutput(os.Stderr)
 	if err := fs.Parse(args); err != nil || *dbPath == "" {
 		webUsage()
@@ -56,8 +61,18 @@ func webServe(args []string) int {
 	}
 	defer st.Close()
 
+	// Serving over TLS is not optional in practice: the session cookie is
+	// the key to the whole panel, and a cookie sent in the clear over a
+	// mobile network is a cookie somebody else can use.
+	tls := *certFile != "" && *keyFile != ""
+	if (*certFile == "") != (*keyFile == "") {
+		fmt.Fprintln(os.Stderr, "serve: -tls-cert and -tls-key go together")
+		return 2
+	}
+
 	subSrv := &subs.Server{Store: st, BaseURL: *baseURL}
-	webHandler := web.HandlerWithDB(st, *dbPath)
+	srv := &web.Server{Store: st, DBPath: *dbPath, Secure: tls}
+	webHandler := srv.Routes()
 
 	mux := http.NewServeMux()
 	mux.Handle("/hp-ui/", webHandler)
@@ -69,10 +84,22 @@ func webServe(args []string) int {
 		fmt.Fprintln(os.Stderr,
 			"warning: no admin account yet — run: hami admin create -db "+*dbPath+" -user NAME")
 	}
+	scheme := "http"
+	if tls {
+		scheme = "https"
+	}
 	fmt.Printf("HP-UI on %s\n", *addr)
-	fmt.Printf("  login: http://%s/hp-ui/login\n", *addr)
+	fmt.Printf("  login: %s://%s/hp-ui/login\n", scheme, *addr)
 	if *baseURL != "" {
 		fmt.Printf("  sub: %s/sub/<token>\n", *baseURL)
+	}
+
+	if tls {
+		if err := http.ListenAndServeTLS(*addr, *certFile, *keyFile, mux); err != nil {
+			fmt.Fprintf(os.Stderr, "serve: %v\n", err)
+			return 1
+		}
+		return 0
 	}
 	if err := http.ListenAndServe(*addr, mux); err != nil {
 		fmt.Fprintf(os.Stderr, "serve: %v\n", err)

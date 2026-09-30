@@ -61,9 +61,11 @@ opened read-only, and the original is checksummed before and after.
 `)
 }
 
+// xrayCfg is parsed once and threaded through Options.
 type importFlags struct {
 	db, src, from, host, node, xray, flow string
 	keepSubs, yes                         bool
+	cfg                                   *importer.XrayConfig
 }
 
 func importFlagSet(name string, f *importFlags, withDB bool) *flag.FlagSet {
@@ -83,7 +85,7 @@ func importFlagSet(name string, f *importFlags, withDB bool) *flag.FlagSet {
 	return fs
 }
 
-func importOpen(f importFlags) (*importer.Opened, error) {
+func importOpen(f *importFlags) (*importer.Opened, error) {
 	if f.src == "" {
 		return nil, fmt.Errorf("-src is required")
 	}
@@ -92,7 +94,7 @@ func importOpen(f importFlags) (*importer.Opened, error) {
 		if err != nil {
 			return nil, err
 		}
-		importer.MarzbanXray = cfg
+		f.cfg = cfg
 	}
 	return importer.Open(f.src, importer.Kind(f.from))
 }
@@ -103,7 +105,7 @@ func importScan(args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	src, err := importOpen(f)
+	src, err := importOpen(&f)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		return 1
@@ -111,7 +113,7 @@ func importScan(args []string) int {
 	defer src.Close()
 
 	snap, err := src.Read(importer.Options{
-		Host: f.host, KeepSubTokens: f.keepSubs, Flow: f.flow})
+		Host: f.host, KeepSubTokens: f.keepSubs, Flow: f.flow, XrayConfig: f.cfg})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		return 1
@@ -140,7 +142,7 @@ func importRun(args []string, doApply bool) int {
 		return 2
 	}
 
-	src, err := importOpen(f)
+	src, err := importOpen(&f)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		return 1
@@ -154,7 +156,8 @@ func importRun(args []string, doApply bool) int {
 	}
 	defer st.Close()
 
-	opt := importer.Options{Host: f.host, KeepSubTokens: f.keepSubs, Flow: f.flow}
+	opt := importer.Options{Host: f.host, KeepSubTokens: f.keepSubs, Flow: f.flow,
+		XrayConfig: f.cfg}
 	if f.node != "" {
 		n, err := st.GetNodeByName(f.node)
 		if err != nil {
