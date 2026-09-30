@@ -153,54 +153,62 @@
   }
   .icon-btn:hover{transform:translateY(-1px);box-shadow:var(--shadow-sm)}
 
-  /* shell — brand compact left, login centered right but overall centered */
+  /* shell — the card sits in the middle of the page, with the branding
+     floated over the top-left corner so it does not push the card right */
   .shell{
+    position:relative;
     display:flex;
     width:100%;
     min-height:calc(100vh - 60px);
   }
   .brand{
-    width:38%;
+    position:absolute;
+    inset-inline-start:0;
+    top:0;
+    bottom:0;
+    width:34%;
     min-width:280px;
-    max-width:420px;
+    max-width:430px;
     padding:28px 26px;
     display:flex;
     flex-direction:column;
     justify-content:space-between;
+    pointer-events:none;
   }
+  .brand a,.brand button{pointer-events:auto}
   /* compact text — no box */
   .brand-main{
     margin-top:12px;
   }
   .brand-main h1{
-    font-size:22px;
-    line-height:1.15;
+    font-size:34px;
+    line-height:1.1;
     font-weight:800;
-    letter-spacing:-.3px;
+    letter-spacing:-.6px;
   }
   .brand-main h1 span{
     display:block;
-    font-size:11.5px;
-    font-weight:600;
-    opacity:.75;
-    margin-top:6px;
+    font-size:15px;
+    font-weight:700;
+    opacity:.85;
+    margin-top:10px;
     letter-spacing:.2px;
   }
   .brand-main p{
-    margin-top:10px;
-    font-size:11.5px;
-    line-height:1.65;
-    opacity:.7;
-    max-width:32ch;
+    margin-top:14px;
+    font-size:14.5px;
+    line-height:1.75;
+    opacity:.8;
+    max-width:34ch;
   }
   .brand-foot{
-    font-size:10px;
-    opacity:.55;
+    font-size:12px;
+    opacity:.6;
     letter-spacing:.4px;
     margin-top:24px;
   }
 
-  /* login — middle */
+  /* login — dead centre of the page */
   .panel{
     flex:1;
     display:flex;
@@ -364,11 +372,19 @@
   body[data-theme="vdark"] .modal code{background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.12)}
   .modal-actions{margin-top:14px;display:flex;justify-content:flex-end;gap:8px}
 
-  @media (max-width:900px){
+  /* Below this width the floated branding would sit on top of the card,
+     so it goes back to stacking above it. */
+  @media (max-width:1100px){
     .shell{flex-direction:column}
-    .brand{width:100%;max-width:none;min-width:0;padding:18px 20px 0}
+    .brand{
+      position:static;
+      width:100%;max-width:none;min-width:0;
+      padding:18px 20px 0;
+    }
     .brand-main{margin-top:4px}
-    .brand-main h1{font-size:20px}
+    .brand-main h1{font-size:24px}
+    .brand-main h1 span{font-size:13px}
+    .brand-main p{font-size:13.5px;max-width:none}
     .brand-foot{display:none}
     .panel{padding:16px}
   }
@@ -391,7 +407,7 @@
   <aside class="brand">
     <div class="brand-main">
       <h1>HP-UI <span>HAMI PANEL — HAMI SMART SYSTEMS</span></h1>
-      <p data-i18n="brand_desc">Open-source panel, Go + React, multi-node ready. Docs on GitHub.</p>
+      <p data-i18n="brand_desc">A Go panel that runs Xray itself. Multi-node, and it imports your users straight from 3x-ui, x-ui or marzban.</p>
     </div>
     <div class="brand-foot">HAMI SMART SYSTEMS — hp-ui • v0.4.0 • GPL-3.0</div>
   </aside>
@@ -463,7 +479,7 @@ systemctl restart hami-panel
       remember: "Remember me",
       forgot: "Forgot password?",
       enter: "Enter — Sign In",
-      brand_desc: "Open-source panel, Go + React, multi-node ready. Docs on GitHub.",
+      brand_desc: "A Go panel that runs Xray itself. Multi-node, and it imports your users straight from 3x-ui, x-ui or marzban.",
       forgot_title: "Forgot password — how it works",
       forgot_p1: "HP-UI does not send password via email by default. Admin password is stored hashed on the server. If you forgot it, reset from server console.",
       forgot_p2: "If SMTP is configured in /opt/hami-panel/config.yaml, you can enable email reset. Otherwise use console:",
@@ -481,7 +497,7 @@ systemctl restart hami-panel
       remember: "مرا به خاطر بسپار",
       forgot: "فراموشی رمز؟",
       enter: "ورود — Enter HP-UI",
-      brand_desc: "پنل متن‌باز، Go + React، آماده چندنوده. مستندات در گیت‌هاب.",
+      brand_desc: "پنلی که خودش ایکس‌ری را اداره می‌کند. چندسروره، و کاربرهایتان را مستقیم از پنل‌های دیگر می‌آورد.",
       forgot_title: "فراموشی رمز — نحوه کار",
       forgot_p1: "HP-UI به‌صورت پیش‌فرض رمز را با ایمیل نمی‌فرستد. رمز هش شده روی سرور است. از کنسول ریست کنید.",
       forgot_p2: "اگر SMTP در config.yaml تنظیم شده باشد ریست ایمیلی فعال می‌شود، در غیر این صورت از کنسول:",
