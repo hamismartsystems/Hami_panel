@@ -57,6 +57,8 @@ func main() {
 		os.Exit(templateCmd(os.Args[2:]))
 	case "reality":
 		os.Exit(realityCmd(os.Args[2:]))
+	case "import":
+		os.Exit(importCmd(os.Args[2:]))
 	case "admin":
 		os.Exit(adminCmd(os.Args[2:]))
 	case "web", "hpui", "hp-ui":
@@ -71,7 +73,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage:\n  hami gen -spec inbounds.json -out config.json [-core xray|singbox]\n  hami canary -spec inbounds.json [-xray /path/to/xray]\n  hami guard -spec inbounds.json [-dial 127.0.0.1] [-db panel.db] [-repair -xray /path/to/xray -config config.json]\n  hami pin [-dir /var/lib/hami]\n  hami upgrade -dir /var/lib/hami -bin ./xray -version 26.3.27\n  hami backup -db panel.db -out backup.tar.gz [-xray-dir /var/lib/hami]\n  hami restore -in backup.tar.gz -db panel.db [-xray-dir /var/lib/hami]\n  hami audit -db panel.db [-tail 50] [-level warn]\n  hami user ... (hami user with no args prints user usage)\n  hami sub serve -db panel.db [-addr :8080] [-base-url URL]\n  hami notice -db panel.db [-days 3] [-ratio 0.8] [-telegram TOKEN:CHATID]\n  hami node add|list|check|remove -db panel.db\n  hami agent run -listen ADDR -name NAME -api-key KEY\n  hami template list\n  hami template apply -db panel.db -template NAME -remark REMARK -host HOST -port PORT -sni SNI -dest DEST ...\n  hami reality check -dest HOST:PORT -sni SNI\n  hami reality keygen\n  hami reality rotate -db panel.db -id ID [-new-sid] [-new-key]\n  hami admin create|list|passwd|delete -db panel.db -user NAME\n  hami web serve -db panel.db [-addr :8080] [-base-url URL]\n")
+	fmt.Fprintf(os.Stderr, "usage:\n  hami gen -spec inbounds.json -out config.json [-core xray|singbox]\n  hami canary -spec inbounds.json [-xray /path/to/xray]\n  hami guard -spec inbounds.json [-dial 127.0.0.1] [-db panel.db] [-repair -xray /path/to/xray -config config.json]\n  hami pin [-dir /var/lib/hami]\n  hami upgrade -dir /var/lib/hami -bin ./xray -version 26.3.27\n  hami backup -db panel.db -out backup.tar.gz [-xray-dir /var/lib/hami]\n  hami restore -in backup.tar.gz -db panel.db [-xray-dir /var/lib/hami]\n  hami audit -db panel.db [-tail 50] [-level warn]\n  hami user ... (hami user with no args prints user usage)\n  hami sub serve -db panel.db [-addr :8080] [-base-url URL]\n  hami notice -db panel.db [-days 3] [-ratio 0.8] [-telegram TOKEN:CHATID]\n  hami node add|list|check|remove -db panel.db\n  hami agent run -listen ADDR -name NAME -api-key KEY\n  hami template list\n  hami template apply -db panel.db -template NAME -remark REMARK -host HOST -port PORT -sni SNI -dest DEST ...\n  hami reality check -dest HOST:PORT -sni SNI\n  hami reality keygen\n  hami reality rotate -db panel.db -id ID [-new-sid] [-new-key]\n  hami admin create|list|passwd|delete -db panel.db -user NAME\n  hami import scan|plan|apply -db panel.db -src /etc/x-ui/x-ui.db [-keep-subs] [-yes]\n  hami web serve -db panel.db [-addr :8080] [-base-url URL]\n")
 }
 
 func gen(args []string) int {

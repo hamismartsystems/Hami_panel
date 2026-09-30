@@ -343,8 +343,15 @@ func (s *Store) CreateClient(c *Client) error {
 	if c.UUID == "" && c.Password == "" && c.SSPassword == "" {
 		return errors.New("client needs a uuid or a password")
 	}
-	c.CreatedAt = time.Now().UTC()
+	// A brand new client starts enabled; callers that need otherwise say
+	// so afterwards with SetClientEnabled, which keeps this the one place
+	// that decides what "new" means.
 	c.Enable = true
+	// CreatedAt is the caller's when it is set, so an import can keep the
+	// date the customer actually signed up.
+	if c.CreatedAt.IsZero() {
+		c.CreatedAt = time.Now().UTC()
+	}
 	var expire interface{}
 	if c.ExpireAt != nil {
 		expire = c.ExpireAt.UTC().Format(time.RFC3339)
