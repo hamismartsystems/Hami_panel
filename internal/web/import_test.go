@@ -390,3 +390,92 @@ func TestDashboardShipsTheMigrateTab(t *testing.T) {
 		}
 	}
 }
+
+func TestImportCandidatesFindsAPanelSittingNextToOurs(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "panel.db")
+	st, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	h := (&Server{Store: st, DBPath: dbPath}).Routes()
+	cookie := loginAs(t, st, h)
+
+	// drop a real 3x-ui database beside the panel's own file
+	src := sourcePanel(t)
+	blob, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	neighbour := filepath.Join(filepath.Dir(dbPath), "old-panel.db")
+	if err := os.WriteFile(neighbour, blob, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// and something that is not a panel at all
+	if err := os.WriteFile(filepath.Join(filepath.Dir(dbPath), "notes.db"),
+		[]byte("not a database"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", "/api/import/candidates", nil)
+	req.Header.Set("Cookie", cookie)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("candidates: %d %s", rec.Code, rec.Body.String())
+	}
+
+	list, _ := decodeBody(t, rec)["candidates"].([]any)
+	if len(list) != 1 {
+		t.Fatalf("found %d candidates, want exactly the one real panel: %s",
+			len(list), rec.Body.String())
+	}
+	c := list[0].(map[string]any)
+	if c["path"] != neighbour {
+		t.Errorf("path = %v", c["path"])
+	}
+	if c["panel"] != "3x-ui" {
+		t.Errorf("panel = %v", c["panel"])
+	}
+	if c["clients"].(float64) != 2 || c["inbounds"].(float64) != 1 {
+		t.Errorf("counts wrong: %v", c)
+	}
+}
+
+func TestImportCandidatesSkipsOurOwnDatabaseAndItsBackups(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "panel.db")
+	st, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	h := (&Server{Store: st, DBPath: dbPath}).Routes()
+	cookie := loginAs(t, st, h)
+
+	// a backup taken by a previous import must not be offered as a source
+	blob, _ := os.ReadFile(dbPath)
+	_ = os.WriteFile(dbPath+".before-import-20260101-000000", blob, 0o600)
+
+	req := httptest.NewRequest("GET", "/api/import/candidates", nil)
+	req.Header.Set("Cookie", cookie)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if strings.Contains(body, "before-import") {
+		t.Errorf("offered its own backup as a panel to import: %s", body)
+	}
+	if strings.Contains(body, filepath.Base(dbPath)+`"`) {
+		t.Errorf("offered its own database: %s", body)
+	}
+}
+
+func TestImportCandidatesNeedsASession(t *testing.T) {
+	_, h, _ := importTestServer(t)
+	req := httptest.NewRequest("GET", "/api/import/candidates", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("got %d, want 401", rec.Code)
+	}
+}

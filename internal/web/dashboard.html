@@ -158,6 +158,20 @@
     font-size:13px;font-weight:700;background:var(--line);color:var(--muted);transition:.2s}
   .mg-step.on{background:var(--accent);color:#06210f}
   .mg-step.done{background:rgba(46,160,67,.85);color:#fff}
+  .mg-found{display:grid;gap:10px;margin:4px 0 16px}
+  .mg-card{display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:14px;
+    border:1px solid var(--line);background:var(--line);cursor:pointer;text-align:start;
+    width:100%;font:inherit;color:var(--text);transition:.15s}
+  .mg-card:hover{border-color:var(--accent);transform:translateY(-1px)}
+  .mg-card .dot{width:38px;height:38px;border-radius:11px;flex:0 0 38px;display:grid;
+    place-items:center;background:var(--accent);color:#06210f;font-weight:800;font-size:15px}
+  .mg-card .who{flex:1;min-width:0}
+  .mg-card .who b{display:block;font-size:14px}
+  .mg-card .who small{display:block;color:var(--muted);font-size:12px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:ltr}
+  .mg-card .cnt{font-size:12px;color:var(--muted);white-space:nowrap}
+  .mg-or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;margin:2px 0 10px}
+  .mg-or:before,.mg-or:after{content:"";flex:1;height:1px;background:var(--line)}
   .mg-meta{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
   .mg-meta span{font-size:12px;padding:5px 10px;border-radius:999px;
     background:var(--line);color:var(--text)}
@@ -250,6 +264,8 @@
         and its checksum is compared before and after.</p>
 
       <div class="err-line" id="mg-err"></div>
+
+      <div id="mgFound"></div>
 
       <div class="mg-steps">
         <span class="mg-step on" id="mg-s1">1</span><i></i>
@@ -474,7 +490,11 @@ const I18N = {
       mg_done:"Imported",mg_verified:"Read back and checked against the source: quotas, usage, expiry, device limits and on/off all match.",
       mg_backup:"Your database as it was before this run",
       mg_confirm:"Import these into your panel?",
-      mg_nofile:"Choose a file, or type a path on this server."},
+      mg_nofile:"Choose a file, or type a path on this server.",
+      mg_found_here:"Panels found on this server",
+      mg_found_none:"No other panel found on this server. Upload its database instead.",
+      mg_or:"or point at it yourself",
+      mg_use:"use this"},
   fa:{tagline:"کنترل اچ‌پی‌یوآی",refresh:"تازه‌سازی",signout:"خروج",
       t_overview:"نمای کلی",t_inbounds:"ورودی‌ها",t_users:"کاربران",t_nodes:"گره‌ها",t_logs:"رویدادها",
       k_users:"کاربران",k_inbounds:"ورودی‌ها",k_nodes:"گره‌ها",k_traffic:"ترافیک",
@@ -525,7 +545,11 @@ const I18N = {
       mg_done:"آورده شد",mg_verified:"دوباره خوانده و با مبدأ مقایسه شد: سهمیه، مصرف، انقضا، سقف دستگاه و روشن یا خاموش بودن همه یکی است.",
       mg_backup:"پایگاه دادهٔ شما، پیش از این اجرا",
       mg_confirm:"این‌ها به پنل شما اضافه شوند؟",
-      mg_nofile:"یک فایل انتخاب کنید یا نشانی فایلی روی همین سرور را بنویسید."}
+      mg_nofile:"یک فایل انتخاب کنید یا نشانی فایلی روی همین سرور را بنویسید.",
+      mg_found_here:"پنل‌هایی که روی همین سرور پیدا شد",
+      mg_found_none:"پنل دیگری روی این سرور پیدا نشد. فایلش را بفرستید.",
+      mg_or:"یا خودتان نشانی بدهید",
+      mg_use:"همین را بیاور"}
 };
 let lang = localStorage.getItem('hpui-lang') || 'en';
 const T = k => (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k;
@@ -765,6 +789,7 @@ async function openInboundModal(){
         `<option value="${esc(t.name)}">${esc(t.name)} — ${esc(t.core)}</option>`).join('');
     }
     mgFillNodes();
+    mgLoadFound();
     document.getElementById('nodeSel').innerHTML = D.nodes.map(n =>
       `<option value="${n.id}">${n.id === 0 ? T('thisserver') : esc(n.name)}</option>`).join('');
     syncInbForm(); openM('m-inbound');
@@ -1009,6 +1034,35 @@ function mgFillNodes(){
   sel.innerHTML = `<option value="">${T('mg_node_this')}</option>` +
     D.nodes.map(n => `<option value="${esc(n.name)}">${esc(n.name)}</option>`).join('');
   sel.value = cur;
+}
+
+
+async function mgLoadFound(){
+  const box = document.getElementById('mgFound');
+  if(!box) return;
+  try{
+    const j = await api('/api/import/candidates');
+    const list = j.candidates || [];
+    if(!list.length){
+      box.innerHTML = `<div class="mg-note skip">${T('mg_found_none')}</div>` +
+        `<div class="mg-or">${T('mg_or')}</div>`;
+      return;
+    }
+    box.innerHTML = `<b style="font-size:13px">${T('mg_found_here')}</b>` +
+      `<div class="mg-found">` + list.map(c => {
+        const n = (c.clients === undefined) ? '' :
+          `${c.inbounds} ${T('count_inb')} · ${c.clients} ${T('count_usr')}`;
+        return `<button type="button" class="mg-card" onclick="mgUse('${esc(c.path)}')">
+          <span class="dot">${esc(String(c.panel||'?').charAt(0).toUpperCase())}</span>
+          <span class="who"><b>${esc(c.panel)} — ${esc(c.variant)}</b><small>${esc(c.path)}</small></span>
+          <span class="cnt">${esc(n)}</span></button>`;
+      }).join('') + `</div><div class="mg-or">${T('mg_or')}</div>`;
+  }catch(e){ box.innerHTML = ''; }
+}
+function mgUse(path){
+  document.getElementById('mgFile').value = '';
+  document.getElementById('mgPath').value = path;
+  document.getElementById('mgForm').requestSubmit();
 }
 
 </script>

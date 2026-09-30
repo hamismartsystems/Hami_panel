@@ -404,3 +404,79 @@ func (s *Server) apiImportCancel(w http.ResponseWriter, r *http.Request, a *stor
 	s.imports.drop(strings.TrimSpace(r.FormValue("session")))
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
+
+/* ── finding panels without being told where they are ────────────────── */
+
+// candidatePaths are where the panels in the wild actually put their
+// database. Asking an operator to type a path is asking them to know
+// something they have no reason to know.
+var candidatePaths = []string{
+	"/etc/x-ui/x-ui.db",
+	"/usr/local/x-ui/x-ui.db",
+	"/var/lib/x-ui/x-ui.db",
+	"/etc/3x-ui/x-ui.db",
+	"/var/lib/marzban/db.sqlite3",
+	"/opt/marzban/db.sqlite3",
+	"/var/lib/marzneshin/db.sqlite3",
+}
+
+// apiImportCandidates looks in the usual places, plus alongside this
+// panel's own database, and reports every file that turns out to be a
+// panel it can read. Anything it cannot read is simply not offered.
+func (s *Server) apiImportCandidates(w http.ResponseWriter, r *http.Request, a *store.Admin) {
+	seen := map[string]bool{}
+	paths := append([]string{}, candidatePaths...)
+
+	// Operators often copy the old panel's file next to the new one.
+	if s.DBPath != "" {
+		dir := filepath.Dir(s.DBPath)
+		if entries, err := os.ReadDir(dir); err == nil {
+			for _, e := range entries {
+				if e.IsDir() {
+					continue
+				}
+				name := e.Name()
+				full := filepath.Join(dir, name)
+				if full == s.DBPath || strings.Contains(name, ".before-import-") {
+					continue
+				}
+				switch strings.ToLower(filepath.Ext(name)) {
+				case ".db", ".sqlite", ".sqlite3":
+					paths = append(paths, full)
+				}
+			}
+		}
+	}
+
+	found := make([]map[string]any, 0)
+	for _, p := range paths {
+		if seen[p] {
+			continue
+		}
+		seen[p] = true
+		info, err := os.Stat(p)
+		if err != nil || info.IsDir() {
+			continue
+		}
+		src, err := importer.Open(p, "")
+		if err != nil {
+			continue // not a panel we know; say nothing rather than confuse
+		}
+		snap, rerr := src.Read(importer.Options{})
+		entry := map[string]any{
+			"path": p, "panel": string(src.Source.Kind()), "variant": src.Variant,
+			"size": info.Size(),
+		}
+		if rerr == nil {
+			clients := 0
+			for _, in := range snap.Inbounds {
+				clients += len(in.Clients)
+			}
+			entry["inbounds"] = len(snap.Inbounds)
+			entry["clients"] = clients
+		}
+		src.Close()
+		found = append(found, entry)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"candidates": found})
+}

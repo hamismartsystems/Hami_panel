@@ -105,6 +105,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/users/{id}/rotate", s.requireAdmin(s.apiUserRotate))
 
 	// migrating in from another panel
+	mux.HandleFunc("GET /api/import/candidates", s.requireAdmin(s.apiImportCandidates))
 	mux.HandleFunc("POST /api/import/preview", s.requireAdmin(s.apiImportPreview))
 	mux.HandleFunc("POST /api/import/apply", s.requireAdmin(s.apiImportApply))
 	mux.HandleFunc("POST /api/import/cancel", s.requireAdmin(s.apiImportCancel))
