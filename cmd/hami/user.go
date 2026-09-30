@@ -8,8 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-
+	"github.com/hamismartsystems/hami_panel/internal/provision"
 	"github.com/hamismartsystems/hami_panel/internal/store"
 	"github.com/hamismartsystems/hami_panel/internal/subs"
 )
@@ -155,45 +154,26 @@ func userCreate(args []string) int {
 		userUsage()
 		return 2
 	}
-	if _, err := st.GetInbound(inbound); err != nil {
-		fmt.Fprintf(os.Stderr, "inbound %d: %v\n", inbound, err)
-		return 1
-	}
-	if _, err := st.GetClientByEmail(email); err == nil {
-		fmt.Fprintf(os.Stderr, "client %q already exists\n", email)
-		return 1
-	}
-	if uid == "" {
-		uid = uuid.NewString()
-	}
-	var expires *time.Time
-	if expireDays > 0 {
-		t := time.Now().UTC().Add(time.Duration(expireDays) * 24 * time.Hour)
-		expires = &t
-	} else if expireAt != "" {
+	var parsedExpireAt *time.Time
+	if expireAt != "" {
 		t, err := time.Parse(time.RFC3339, expireAt)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "-expire-at must be RFC3339: %v\n", err)
 			return 2
 		}
-		expires = &t
+		parsedExpireAt = &t
 	}
-	c := &store.Client{
-		InboundID: inbound, UUID: uid, Email: email, Enable: true,
-		TotalBytes: gbToBytes(quotaGB), IPLimit: ipLimit,
-		SpeedLimit: int64(speedKbps), ExpireAt: expires,
-	}
-	if err := st.CreateClient(c); err != nil {
-		fmt.Fprintf(os.Stderr, "create: %v\n", err)
-		return 1
-	}
-	token := subs.NewToken()
-	if err := st.RotateSubToken(c.ID, token); err != nil {
-		fmt.Fprintf(os.Stderr, "token: %v\n", err)
+	c, err := provision.User(st, provision.UserOptions{
+		InboundID: inbound, Email: email, UUID: uid, QuotaGB: quotaGB,
+		Days: expireDays, ExpireAt: parsedExpireAt, IPLimit: ipLimit,
+		SpeedKbps: speedKbps,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		return 1
 	}
 	logEvent(dbPath, "info", "user", fmt.Sprintf("created %s on inbound %d", email, inbound), "")
-	fmt.Printf("✅ created client %d\n   uuid: %s\n   sub token: %s\n", c.ID, uid, token)
+	fmt.Printf("✅ created client %d\n   uuid: %s\n   sub token: %s\n", c.ID, c.UUID, c.SubToken)
 	return 0
 }
 

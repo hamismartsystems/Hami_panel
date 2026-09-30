@@ -30,8 +30,12 @@ func webUsage() {
 
 Serves:
   /hp-ui/login   HP-UI login page (HAMI PANEL, colors #9DC183/#0B6623/#043927)
+  /hp-ui/        HP-UI dashboard: inbounds, users, nodes, logs (sign-in required)
   /sub/{token}   subscription (v2ray/Clash/sing-box)
   /sub/{token}/status  status + QR
+
+Create the first operator with:
+  hami admin create -db panel.db -user NAME
 `)
 }
 
@@ -53,14 +57,18 @@ func webServe(args []string) int {
 	defer st.Close()
 
 	subSrv := &subs.Server{Store: st, BaseURL: *baseURL}
-	webHandler := web.Handler()
+	webHandler := web.Handler(st)
 
 	mux := http.NewServeMux()
 	mux.Handle("/hp-ui/", webHandler)
 	mux.Handle("/api/", webHandler)
 	mux.Handle("/sub/", subSrv.Handler())
-	mux.Handle("/", webHandler) // / -> redirect to /hp-ui/login
+	mux.Handle("/", webHandler) // / -> dashboard when signed in, else login
 
+	if n, err := st.CountAdmins(); err == nil && n == 0 {
+		fmt.Fprintln(os.Stderr,
+			"warning: no admin account yet — run: hami admin create -db "+*dbPath+" -user NAME")
+	}
 	fmt.Printf("HP-UI on %s\n", *addr)
 	fmt.Printf("  login: http://%s/hp-ui/login\n", *addr)
 	if *baseURL != "" {

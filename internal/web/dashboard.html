@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HP-UI — HAMI PANEL</title>
+<style>
+  :root{
+    --light-bg:#9DC183; --light-card:#FFFFFF; --light-border:#8DB580;
+    --light-text:#1B2E1A; --light-muted:#3A5A35;
+    --dark-bg:#0B6623; --dark-card:rgba(255,255,255,.07); --dark-border:rgba(255,255,255,.14);
+    --dark-text:#EAF6E3; --dark-muted:#A8C9A0;
+    --vdark-bg:#043927; --vdark-card:rgba(255,255,255,.05); --vdark-border:rgba(255,255,255,.12);
+    --vdark-text:#DFF0D8; --vdark-muted:#8BB88A;
+    --radius:18px; --radius-sm:12px;
+    --shadow:0 20px 60px rgba(0,0,0,.18); --shadow-sm:0 8px 24px rgba(0,0,0,.12);
+    --ok:#2FA84F; --warn:#C8901C; --bad:#C0392B;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{min-height:100%}
+  body{
+    font-family:Inter,Vazirmatn,"Segoe UI",Tahoma,sans-serif;
+    background-color:var(--dark-bg); color:var(--dark-text);
+    transition:background-color .3s,color .3s;
+    background-image:
+      linear-gradient(45deg,rgba(255,255,255,.042) 1px,transparent 1px),
+      linear-gradient(-45deg,rgba(255,255,255,.042) 1px,transparent 1px);
+    background-size:28px 28px; background-position:0 0,14px 14px;
+  }
+  body[data-theme="light"]{background-color:var(--light-bg);color:var(--light-text);
+    background-image:linear-gradient(45deg,rgba(0,0,0,.065) 1px,transparent 1px),
+                     linear-gradient(-45deg,rgba(0,0,0,.065) 1px,transparent 1px)}
+  body[data-theme="dark"]{background-color:var(--dark-bg);color:var(--dark-text)}
+  body[data-theme="vdark"]{background-color:var(--vdark-bg);color:var(--vdark-text);
+    background-image:linear-gradient(45deg,rgba(255,255,255,.035) 1px,transparent 1px),
+                     linear-gradient(-45deg,rgba(255,255,255,.035) 1px,transparent 1px)}
+  body[dir="rtl"]{font-family:Vazirmatn,Inter,Tahoma,sans-serif}
+
+  /* ── chrome ── */
+  .header{display:flex;align-items:center;justify-content:space-between;gap:16px;
+    padding:14px 22px;border-bottom:1px solid var(--dark-border);
+    background:rgba(0,0,0,.10);position:sticky;top:0;z-index:20;backdrop-filter:blur(8px)}
+  body[data-theme="light"] .header{background:rgba(255,255,255,.55);border-color:var(--light-border)}
+  body[data-theme="vdark"] .header{border-color:var(--vdark-border)}
+  .brand{display:flex;align-items:center;gap:11px}
+  .logo-mark{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;
+    font-weight:800;font-size:18px;background:#0B6623;color:#EAF6E3;
+    box-shadow:var(--shadow-sm);letter-spacing:.5px}
+  body[data-theme="dark"] .logo-mark,body[data-theme="vdark"] .logo-mark{background:#9DC183;color:#08331A}
+  .brand b{font-size:15px;letter-spacing:.4px;display:block;line-height:1.25}
+  .brand span{font-size:11px;opacity:.7}
+  .head-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .icon-btn{border:1px solid var(--dark-border);background:rgba(255,255,255,.07);
+    color:inherit;padding:7px 13px;border-radius:10px;cursor:pointer;font:inherit;font-size:12.5px;
+    transition:.15s}
+  body[data-theme="light"] .icon-btn{background:#fff;border-color:var(--light-border)}
+  .icon-btn:hover{transform:translateY(-1px);box-shadow:var(--shadow-sm)}
+  .who{font-size:12.5px;opacity:.8;padding:0 4px}
+
+  /* ── tabs ── */
+  .tabs{display:flex;gap:6px;padding:14px 22px 0;flex-wrap:wrap}
+  .tab{border:1px solid transparent;background:transparent;color:inherit;font:inherit;
+    font-size:13.5px;padding:9px 16px;border-radius:12px 12px 0 0;cursor:pointer;opacity:.62;
+    border-bottom:2px solid transparent;transition:.15s}
+  .tab:hover{opacity:.9}
+  .tab.on{opacity:1;background:var(--dark-card);border-color:var(--dark-border);
+    border-bottom-color:transparent;font-weight:600}
+  body[data-theme="light"] .tab.on{background:#fff;border-color:var(--light-border)}
+  body[data-theme="vdark"] .tab.on{background:var(--vdark-card);border-color:var(--vdark-border)}
+
+  main{padding:18px 22px 60px;max-width:1280px;margin:0 auto}
+  .panel{display:none}.panel.on{display:block}
+
+  .card{background:var(--dark-card);border:1px solid var(--dark-border);
+    border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow-sm)}
+  body[data-theme="light"] .card{background:var(--light-card);border-color:var(--light-border)}
+  body[data-theme="vdark"] .card{background:var(--vdark-card);border-color:var(--vdark-border)}
+  .grid{display:grid;gap:14px}
+  .g4{grid-template-columns:repeat(auto-fit,minmax(196px,1fr))}
+  .g2{grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}
+  .kpi-label{font-size:12px;opacity:.72;margin-bottom:7px;letter-spacing:.2px}
+  .kpi{font-size:27px;font-weight:800;letter-spacing:.4px;line-height:1.1}
+  .kpi-sub{font-size:11.5px;opacity:.65;margin-top:5px}
+  h2.sec{font-size:14px;margin-bottom:12px;opacity:.85;font-weight:650}
+
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:10px 9px;text-align:start;border-bottom:1px solid var(--dark-border);
+    white-space:nowrap}
+  body[data-theme="light"] th,body[data-theme="light"] td{border-color:#E3EDDD}
+  th{font-size:11.5px;opacity:.65;font-weight:650;letter-spacing:.3px;text-transform:uppercase}
+  tbody tr:hover{background:rgba(255,255,255,.045)}
+  body[data-theme="light"] tbody tr:hover{background:#F4F9F1}
+  .scroll{overflow-x:auto}
+
+  .tag{display:inline-block;font-size:11px;padding:2.5px 9px;border-radius:999px;
+    border:1px solid var(--dark-border);opacity:.92}
+  body[data-theme="light"] .tag{border-color:var(--light-border)}
+  .tag.ok{color:#BDF0C4;border-color:rgba(47,168,79,.55);background:rgba(47,168,79,.18)}
+  .tag.warn{color:#FFE2A8;border-color:rgba(200,144,28,.55);background:rgba(200,144,28,.18)}
+  .tag.bad{color:#FFC9C2;border-color:rgba(192,57,43,.55);background:rgba(192,57,43,.20)}
+  body[data-theme="light"] .tag.ok{color:#14532D;background:#DCF3E0;border-color:#9FD5A8}
+  body[data-theme="light"] .tag.warn{color:#6B4A07;background:#FBEFD2;border-color:#E2C88A}
+  body[data-theme="light"] .tag.bad{color:#7A1D14;background:#FADBD6;border-color:#E7A99F}
+  .mono{font-family:ui-monospace,"JetBrains Mono",Consolas,monospace;font-size:12px;
+    direction:ltr;unicode-bidi:embed}
+  .bar{height:6px;border-radius:4px;background:rgba(0,0,0,.25);overflow:hidden;min-width:92px}
+  body[data-theme="light"] .bar{background:#DCE8D6}
+  .bar i{display:block;height:100%;background:#9DC183}
+  .bar i.hot{background:#C8901C}.bar i.max{background:#C0392B}
+  .btn-s{border:1px solid var(--dark-border);background:rgba(255,255,255,.06);color:inherit;
+    font:inherit;font-size:11.5px;padding:4.5px 10px;border-radius:8px;cursor:pointer}
+  body[data-theme="light"] .btn-s{background:#fff;border-color:var(--light-border)}
+  .btn-s:hover{border-color:#9DC183}
+  .empty{text-align:center;opacity:.6;padding:34px 12px;font-size:13.5px}
+  .toast{position:fixed;inset-inline-start:22px;bottom:22px;z-index:60;display:none;
+    padding:11px 17px;border-radius:12px;background:#0B2F1E;color:#DFF0D8;
+    border:1px solid rgba(255,255,255,.18);box-shadow:var(--shadow);font-size:13px;max-width:72vw}
+  .linkbox{margin-top:12px;padding:11px 13px;border-radius:10px;word-break:break-all;
+    background:rgba(0,0,0,.28);border:1px solid var(--dark-border)}
+  body[data-theme="light"] .linkbox{background:#F2F7EF;border-color:#DDE8D6}
+  .row-actions{display:flex;gap:6px;flex-wrap:wrap}
+  .toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;
+    margin-bottom:12px;flex-wrap:wrap}
+  .btn-p{border:0;background:#9DC183;color:#08331A;font:inherit;font-weight:700;font-size:13px;
+    padding:9px 18px;border-radius:11px;cursor:pointer;box-shadow:var(--shadow-sm)}
+  body[data-theme="light"] .btn-p{background:#0B6623;color:#EAF6E3}
+  .btn-p:hover{filter:brightness(1.06)}
+  .backdrop{position:fixed;inset:0;background:rgba(2,18,10,.72);z-index:50;
+    display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px)}
+  .backdrop.open{display:flex}
+  .modal{width:min(560px,100%);max-height:88vh;overflow:auto;border-radius:var(--radius);
+    padding:24px;background:#123F1C;border:1px solid rgba(255,255,255,.18);
+    color:var(--dark-text);box-shadow:var(--shadow)}
+  body[data-theme="light"] .modal{background:#fff;border-color:#DDE8D6;color:var(--light-text)}
+  body[data-theme="vdark"] .modal{background:#0B2F1E;border-color:rgba(255,255,255,.14)}
+  .modal h3{font-size:16px;margin-bottom:4px}
+  .modal p.hint{font-size:12px;opacity:.7;margin-bottom:16px}
+  .field{margin-bottom:13px}
+  .field label{display:block;font-size:12px;opacity:.78;margin-bottom:5px}
+  .field input,.field select{width:100%;padding:10px 12px;border-radius:10px;font:inherit;
+    font-size:13.5px;border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.22);color:inherit}
+  body[data-theme="light"] .field input,body[data-theme="light"] .field select{
+    background:#F7FBF5;border-color:#D7E5D0;color:var(--light-text)}
+  .field input:focus,.field select:focus{outline:0;border-color:#9DC183}
+  .field small{display:block;font-size:11px;opacity:.6;margin-top:4px}
+  .fgrid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+  .modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:18px;flex-wrap:wrap}
+  .qrwrap{text-align:center;padding:8px}
+  .qrwrap svg{width:236px;height:236px;background:#fff;padding:10px;border-radius:14px}
+  .err-line{background:rgba(192,57,43,.18);border:1px solid rgba(192,57,43,.5);
+    color:#FFC9C2;padding:9px 12px;border-radius:10px;font-size:12.5px;margin-bottom:12px;
+    display:none}
+  body[data-theme="light"] .err-line{background:#FADBD6;border-color:#E7A99F;color:#7A1D14}
+  @media(max-width:640px){main{padding:14px}.header{padding:12px 14px}.tabs{padding:12px 14px 0}}
+</style>
+</head>
+<body data-theme="dark">
+
+<div class="header">
+  <div class="brand">
+    <div class="logo-mark">H</div>
+    <div><b>HAMI PANEL</b><span data-i18n="tagline">HP-UI control</span></div>
+  </div>
+  <div class="head-actions">
+    <span class="who" id="who"></span>
+    <button class="icon-btn" id="refreshBtn" data-i18n="refresh">Refresh</button>
+    <button class="icon-btn" id="langBtn">EN</button>
+    <button class="icon-btn" id="themeBtn">☀️ Light</button>
+    <button class="icon-btn" id="outBtn" data-i18n="signout">Sign out</button>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab on" data-p="overview" data-i18n="t_overview">Overview</button>
+  <button class="tab" data-p="inbounds" data-i18n="t_inbounds">Inbounds</button>
+  <button class="tab" data-p="users" data-i18n="t_users">Users</button>
+  <button class="tab" data-p="nodes" data-i18n="t_nodes">Nodes</button>
+  <button class="tab" data-p="logs" data-i18n="t_logs">Logs</button>
+</div>
+
+<main>
+  <section class="panel on" id="p-overview">
+    <div class="grid g4" style="margin-bottom:14px">
+      <div class="card"><div class="kpi-label" data-i18n="k_users">Users</div>
+        <div class="kpi" id="k_users">—</div><div class="kpi-sub" id="k_users_sub"></div></div>
+      <div class="card"><div class="kpi-label" data-i18n="k_inbounds">Inbounds</div>
+        <div class="kpi" id="k_inb">—</div><div class="kpi-sub" id="k_inb_sub"></div></div>
+      <div class="card"><div class="kpi-label" data-i18n="k_nodes">Nodes</div>
+        <div class="kpi" id="k_nodes">—</div><div class="kpi-sub" id="k_nodes_sub"></div></div>
+      <div class="card"><div class="kpi-label" data-i18n="k_traffic">Traffic</div>
+        <div class="kpi" id="k_traffic">—</div><div class="kpi-sub" id="k_traffic_sub"></div></div>
+    </div>
+    <div class="grid g2">
+      <div class="card"><h2 class="sec" data-i18n="s_attention">Needs attention</h2>
+        <div class="scroll" id="attention"></div></div>
+      <div class="card"><h2 class="sec" data-i18n="s_recent">Recent events</h2>
+        <div class="scroll" id="recent"></div></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-inbounds">
+    <div class="toolbar">
+      <span style="opacity:.7;font-size:12.5px" id="inb-count"></span>
+      <button class="btn-p" id="newInbBtn" data-i18n="new_inbound">New inbound</button>
+    </div>
+    <div class="card"><div class="scroll" id="inbounds"></div></div>
+  </section>
+
+  <section class="panel" id="p-users">
+    <div class="toolbar">
+      <span style="opacity:.7;font-size:12.5px" id="usr-count"></span>
+      <button class="btn-p" id="newUsrBtn" data-i18n="new_user">New user</button>
+    </div>
+    <div class="card"><div class="scroll" id="users"></div>
+      <div id="linkout"></div></div>
+  </section>
+
+  <section class="panel" id="p-nodes">
+    <div class="card"><div class="scroll" id="nodes"></div></div>
+  </section>
+
+  <section class="panel" id="p-logs">
+    <div class="card"><div class="scroll" id="logs"></div></div>
+  </section>
+</main>
+
+
+<div class="backdrop" id="m-inbound">
+  <form class="modal" onsubmit="return submitInbound(event)">
+    <h3 data-i18n="new_inbound">New inbound</h3>
+    <p class="hint" data-i18n="inb_hint">Pick a template; Reality keys are generated for you.</p>
+    <div class="err-line" id="inb-err"></div>
+    <div class="field"><label data-i18n="f_template">Template</label>
+      <select name="template" id="tplSel" onchange="syncInbForm()"></select>
+      <small id="tplDesc"></small></div>
+    <div class="fgrid">
+      <div class="field"><label data-i18n="f_remark">Name</label>
+        <input name="remark" placeholder="Reality-443" required></div>
+      <div class="field"><label data-i18n="f_port">Port</label>
+        <input name="port" type="number" min="1" max="65535" value="443" required></div>
+    </div>
+    <div class="field"><label data-i18n="f_host">Public address</label>
+      <input name="host" class="mono" placeholder="198.51.100.10" required></div>
+    <div id="sniRow">
+      <div class="fgrid">
+        <div class="field"><label data-i18n="f_sni">SNI</label>
+          <input name="sni" class="mono" placeholder="www.samsung.com"></div>
+        <div class="field"><label data-i18n="f_dest">Steal from</label>
+          <input name="dest" class="mono" placeholder="www.samsung.com:443">
+          <small data-i18n="f_dest_hint">Leave empty to use the SNI on port 443</small></div>
+      </div>
+    </div>
+    <div class="field"><label data-i18n="f_node">Node</label>
+      <select name="node_id" id="nodeSel"></select></div>
+    <div class="field"><label><input type="checkbox" name="private" value="true"
+      style="width:auto;margin-inline-end:7px"> <span data-i18n="f_private">Private (admin only)</span></label></div>
+    <div class="modal-actions">
+      <button type="button" class="icon-btn" onclick="closeM('m-inbound')" data-i18n="cancel">Cancel</button>
+      <button type="submit" class="btn-p" data-i18n="create">Create</button>
+    </div>
+  </form>
+</div>
+
+<div class="backdrop" id="m-user">
+  <form class="modal" onsubmit="return submitUser(event)">
+    <h3 data-i18n="new_user">New user</h3>
+    <p class="hint" data-i18n="usr_hint">A subscription token is issued automatically.</p>
+    <div class="err-line" id="usr-err"></div>
+    <div class="field"><label data-i18n="f_inbound">Inbound</label>
+      <select name="inbound_id" id="inbSel" required></select></div>
+    <div class="fgrid">
+      <div class="field"><label data-i18n="f_email">User name</label>
+        <input name="email" placeholder="ali-1404" required></div>
+      <div class="field"><label data-i18n="f_count">How many</label>
+        <input name="count" type="number" min="1" max="100" value="1"></div>
+    </div>
+    <div class="fgrid">
+      <div class="field"><label data-i18n="f_quota">Quota (GB)</label>
+        <input name="quota_gb" type="number" min="0" step="0.5" value="50">
+        <small data-i18n="f_zero_unl">0 = unlimited</small></div>
+      <div class="field"><label data-i18n="f_days">Days</label>
+        <input name="days" type="number" min="0" value="30">
+        <small data-i18n="f_zero_never">0 = never expires</small></div>
+      <div class="field"><label data-i18n="f_iplimit">Devices</label>
+        <input name="ip_limit" type="number" min="0" value="0"></div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="icon-btn" onclick="closeM('m-user')" data-i18n="cancel">Cancel</button>
+      <button type="submit" class="btn-p" data-i18n="create">Create</button>
+    </div>
+  </form>
+</div>
+
+<div class="backdrop" id="m-edit">
+  <form class="modal" onsubmit="return submitEdit(event)">
+    <h3 data-i18n="edit_user">Edit user</h3>
+    <p class="hint" id="edit-who"></p>
+    <div class="err-line" id="edit-err"></div>
+    <input type="hidden" name="id" id="edit-id">
+    <div class="fgrid">
+      <div class="field"><label data-i18n="f_quota">Quota (GB)</label>
+        <input name="quota_gb" id="edit-quota" type="number" min="0" step="0.5"></div>
+      <div class="field"><label data-i18n="f_renew">Renew for (days)</label>
+        <input name="days" id="edit-days" type="number" min="0" value="30">
+        <small data-i18n="f_from_now">Counted from today</small></div>
+      <div class="field"><label data-i18n="f_iplimit">Devices</label>
+        <input name="ip_limit" id="edit-ip" type="number" min="0"></div>
+    </div>
+    <div class="field"><label><input type="checkbox" name="unlimited_time" value="true"
+      style="width:auto;margin-inline-end:7px"> <span data-i18n="f_no_expiry">No expiry</span></label></div>
+    <div class="modal-actions">
+      <button type="button" class="icon-btn" onclick="closeM('m-edit')" data-i18n="cancel">Cancel</button>
+      <button type="submit" class="btn-p" data-i18n="save">Save</button>
+    </div>
+  </form>
+</div>
+
+<div class="backdrop" id="m-qr">
+  <div class="modal">
+    <h3 id="qr-title"></h3>
+    <p class="hint" data-i18n="qr_hint">Scan in v2rayNG, Streisand, Hiddify or sing-box.</p>
+    <div class="qrwrap" id="qr-svg"></div>
+    <div class="linkbox mono" id="qr-link" style="margin-top:14px"></div>
+    <div class="modal-actions">
+      <button type="button" class="icon-btn" onclick="copyQR()" data-i18n="copy">Copy</button>
+      <button type="button" class="btn-p" onclick="closeM('m-qr')" data-i18n="close">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ── i18n ───────────────────────────────────────────────────────────── */
+const I18N = {
+  en:{tagline:"HP-UI control",refresh:"Refresh",signout:"Sign out",
+      t_overview:"Overview",t_inbounds:"Inbounds",t_users:"Users",t_nodes:"Nodes",t_logs:"Logs",
+      k_users:"Users",k_inbounds:"Inbounds",k_nodes:"Nodes",k_traffic:"Traffic",
+      s_attention:"Needs attention",s_recent:"Recent events",
+      c_name:"Name",c_proto:"Protocol",c_port:"Port",c_transport:"Transport",c_security:"Security",
+      c_node:"Node",c_clients:"Users",c_state:"State",c_actions:"",c_user:"User",c_inbound:"Inbound",
+      c_usage:"Usage",c_quota:"Quota",c_expiry:"Expiry",c_addr:"Address",c_seen:"Last seen",
+      c_time:"Time",c_level:"Level",c_actor:"Actor",c_msg:"Message",
+      on:"on",off:"off",active:"active",disabled:"disabled",expired:"expired",
+      exhausted:"quota used",unlimited:"unlimited",permanent:"permanent",days:"d left",
+      priv:"private",up:"up",down:"down",unknown:"unknown",unstable:"unstable",
+      enable:"Enable",disable:"Disable",reset:"Reset",link:"Link",copy:"Copy",
+      none:"Nothing here yet",allgood:"All users are healthy",
+      signedout:"Signed out",copied:"Copied",err:"Request failed",
+      new_inbound:"New inbound",new_user:"New user",edit_user:"Edit user",
+      inb_hint:"Pick a template; Reality keys are generated for you.",
+      usr_hint:"A subscription token is issued automatically.",
+      qr_hint:"Scan in v2rayNG, Streisand, Hiddify or sing-box.",
+      f_template:"Template",f_remark:"Name",f_port:"Port",f_host:"Public address",
+      f_sni:"SNI",f_dest:"Steal from",f_dest_hint:"Leave empty to use the SNI on port 443",
+      f_node:"Node",f_private:"Private (admin only)",f_inbound:"Inbound",f_email:"User name",
+      f_count:"How many",f_quota:"Quota (GB)",f_days:"Days",f_iplimit:"Devices",
+      f_zero_unl:"0 = unlimited",f_zero_never:"0 = never expires",
+      f_renew:"Renew for (days)",f_from_now:"Counted from today",f_no_expiry:"No expiry",
+      cancel:"Cancel",create:"Create",save:"Save",close:"Close",
+      edit:"Edit",del:"Delete",qr:"QR",rotate:"New token",thisserver:"this server",
+      created:"Created",saved:"Saved",deleted:"Deleted",rotated:"New token issued",
+      confirm_del_user:"Delete this user? Their link stops working immediately.",
+      confirm_del_inb:"Delete this inbound and all of its users?",
+      confirm_rotate:"Issue a new token? The old link stops working immediately.",
+      count_inb:"inbounds",count_usr:"users"},
+  fa:{tagline:"کنترل اچ‌پی‌یوآی",refresh:"تازه‌سازی",signout:"خروج",
+      t_overview:"نمای کلی",t_inbounds:"ورودی‌ها",t_users:"کاربران",t_nodes:"گره‌ها",t_logs:"رویدادها",
+      k_users:"کاربران",k_inbounds:"ورودی‌ها",k_nodes:"گره‌ها",k_traffic:"ترافیک",
+      s_attention:"نیازمند رسیدگی",s_recent:"رویدادهای اخیر",
+      c_name:"نام",c_proto:"پروتکل",c_port:"پورت",c_transport:"بستر",c_security:"امنیت",
+      c_node:"گره",c_clients:"کاربر",c_state:"وضعیت",c_actions:"",c_user:"کاربر",c_inbound:"ورودی",
+      c_usage:"مصرف",c_quota:"سهمیه",c_expiry:"انقضا",c_addr:"نشانی",c_seen:"آخرین بازدید",
+      c_time:"زمان",c_level:"سطح",c_actor:"عامل",c_msg:"پیام",
+      on:"روشن",off:"خاموش",active:"فعال",disabled:"غیرفعال",expired:"منقضی",
+      exhausted:"اتمام حجم",unlimited:"نامحدود",permanent:"دائمی",days:"روز",
+      priv:"خصوصی",up:"در دسترس",down:"قطع",unknown:"نامشخص",unstable:"ناپایدار",
+      enable:"فعال کن",disable:"غیرفعال کن",reset:"صفر کن",link:"لینک",copy:"کپی",
+      none:"هنوز چیزی ثبت نشده",allgood:"همه کاربران سالم‌اند",
+      signedout:"خارج شدید",copied:"کپی شد",err:"درخواست ناموفق بود",
+      new_inbound:"ورودی تازه",new_user:"کاربر تازه",edit_user:"ویرایش کاربر",
+      inb_hint:"یک قالب انتخاب کنید؛ کلیدهای ریلیتی خودکار ساخته می‌شوند.",
+      usr_hint:"نشانه اشتراک به‌صورت خودکار صادر می‌شود.",
+      qr_hint:"با نرم‌افزارهای وی‌تورِی‌ان‌جی، استرایسند، هیدیفای یا سینگ‌باکس بخوانید.",
+      f_template:"قالب",f_remark:"نام",f_port:"پورت",f_host:"نشانی عمومی",
+      f_sni:"نام دامنه",f_dest:"قرض گرفتن از",f_dest_hint:"خالی بگذارید تا همان دامنه روی پورت ۴۴۳ به کار برود",
+      f_node:"گره",f_private:"خصوصی، فقط مدیر",f_inbound:"ورودی",f_email:"نام کاربر",
+      f_count:"چند تا",f_quota:"سهمیه بر حسب گیگابایت",f_days:"روز",f_iplimit:"دستگاه",
+      f_zero_unl:"صفر یعنی نامحدود",f_zero_never:"صفر یعنی بدون انقضا",
+      f_renew:"تمدید برای چند روز",f_from_now:"از امروز حساب می‌شود",f_no_expiry:"بدون انقضا",
+      cancel:"انصراف",create:"ایجاد",save:"ذخیره",close:"بستن",
+      edit:"ویرایش",del:"حذف",qr:"بارکد",rotate:"نشانه تازه",thisserver:"همین سرور",
+      created:"ساخته شد",saved:"ذخیره شد",deleted:"حذف شد",rotated:"نشانه تازه صادر شد",
+      confirm_del_user:"این کاربر حذف شود؟ لینکش بی‌درنگ از کار می‌افتد.",
+      confirm_del_inb:"این ورودی و همه کاربرانش حذف شوند؟",
+      confirm_rotate:"نشانه تازه صادر شود؟ لینک قبلی بی‌درنگ از کار می‌افتد.",
+      count_inb:"ورودی",count_usr:"کاربر"}
+};
+let lang = localStorage.getItem('hpui-lang') || 'en';
+const T = k => (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k;
+
+function applyLang(){
+  document.body.setAttribute('dir', lang === 'fa' ? 'rtl' : 'ltr');
+  document.documentElement.lang = lang;
+  document.getElementById('langBtn').textContent = lang === 'fa' ? 'FA' : 'EN';
+  document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = T(el.dataset.i18n));
+  try{localStorage.setItem('hpui-lang', lang)}catch(e){}
+  render();
+}
+document.getElementById('langBtn').onclick = () => { lang = lang === 'en' ? 'fa' : 'en'; applyLang(); };
+
+/* ── theme (same three as the login page) ───────────────────────────── */
+const THEMES=[{id:'light',icon:'🌙',label:{en:'Dark',fa:'تیره'}},
+              {id:'dark',icon:'🌑',label:{en:'Very dark',fa:'خیلی تیره'}},
+              {id:'vdark',icon:'☀️',label:{en:'Light',fa:'روشن'}}];
+let themeIdx = 1;
+function applyTheme(id){
+  const i = THEMES.findIndex(t => t.id === id); if(i >= 0) themeIdx = i;
+  document.body.setAttribute('data-theme', THEMES[themeIdx].id);
+  const nxt = THEMES[(themeIdx+1) % THEMES.length];
+  document.getElementById('themeBtn').textContent = `${nxt.icon} ${nxt.label[lang]||nxt.label.en}`;
+  try{localStorage.setItem('hpui-theme', THEMES[themeIdx].id)}catch(e){}
+}
+document.getElementById('themeBtn').onclick = () =>
+  applyTheme(THEMES[(themeIdx+1) % THEMES.length].id);
+
+/* ── helpers ────────────────────────────────────────────────────────── */
+const esc = s => String(s ?? '').replace(/[&<>"']/g, m =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+function bytes(n){
+  n = Number(n||0); const u=['B','KB','MB','GB','TB','PB']; let i=0;
+  while(Math.abs(n) >= 1024 && i < u.length-1){ n/=1024; i++; }
+  return (i===0 ? n.toFixed(0) : n.toFixed(2)) + ' ' + u[i];
+}
+function when(ts){ if(!ts) return '—';
+  const d = new Date(ts); return isNaN(d) ? ts : d.toISOString().slice(0,16).replace('T',' '); }
+function toast(msg, bad){
+  const t = document.getElementById('toast'); t.textContent = msg;
+  t.style.borderColor = bad ? 'rgba(192,57,43,.8)' : 'rgba(157,193,131,.8)';
+  t.style.display = 'block'; clearTimeout(window._t);
+  window._t = setTimeout(() => t.style.display = 'none', 3600);
+}
+async function api(path, opts){
+  const r = await fetch(path, Object.assign({headers:{'Accept':'application/json'}}, opts||{}));
+  if(r.status === 401){ location.href = '/hp-ui/login'; throw new Error('unauthorized'); }
+  const j = await r.json().catch(() => ({}));
+  if(!r.ok) throw new Error(j.error || T('err'));
+  return j;
+}
+function table(cols, rows){
+  if(!rows.length) return `<div class="empty">${T('none')}</div>`;
+  return `<table><thead><tr>${cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+}
+function quotaCell(u){
+  if(!u.quota) return `<span style="opacity:.6">${T('unlimited')}</span>`;
+  const p = Math.min(100, Math.round(u.total*100/u.quota));
+  const cls = p >= 100 ? 'max' : (p > 80 ? 'hot' : '');
+  return `<div class="bar"><i class="${cls}" style="width:${p}%"></i></div>
+          <span style="font-size:11px;opacity:.65">${bytes(u.quota)}</span>`;
+}
+function stateTag(u){
+  if(!u.enabled) return `<span class="tag">${T('disabled')}</span>`;
+  if(u.expired) return `<span class="tag bad">${T('expired')}</span>`;
+  if(u.over_quota) return `<span class="tag bad">${T('exhausted')}</span>`;
+  return `<span class="tag ok">${T('active')}</span>`;
+}
+function expiryCell(u){
+  if(!u.expire_at) return `<span style="opacity:.6">${T('permanent')}</span>`;
+  const d = u.days_left;
+  const cls = d === 0 ? 'bad' : (d <= 7 ? 'warn' : '');
+  return `<span class="tag ${cls}">${d} ${T('days')}</span>`;
+}
+
+/* ── state + rendering ──────────────────────────────────────────────── */
+let D = {overview:null, inbounds:[], users:[], nodes:[], events:[]};
+
+function render(){
+  const o = D.overview;
+  if(o){
+    document.getElementById('k_users').textContent = o.users;
+    document.getElementById('k_users_sub').textContent =
+      `${o.users_active} ${T('active')}`;
+    document.getElementById('k_inb').textContent = o.inbounds;
+    document.getElementById('k_inb_sub').textContent = `${o.inbounds_enabled} ${T('on')}`;
+    document.getElementById('k_nodes').textContent = o.nodes;
+    document.getElementById('k_nodes_sub').textContent = `${o.nodes_up} ${T('up')}`;
+    document.getElementById('k_traffic').textContent = bytes(o.up + o.down);
+    document.getElementById('k_traffic_sub').textContent =
+      `↑ ${bytes(o.up)} · ↓ ${bytes(o.down)}`;
+
+    const att = o.attention || [];
+    document.getElementById('attention').innerHTML = att.length
+      ? table([T('c_user'), T('c_state'), T('c_expiry')],
+          att.map(u => [esc(u.email), stateTag(u), expiryCell(u)]))
+      : `<div class="empty">${T('allgood')}</div>`;
+    document.getElementById('recent').innerHTML =
+      table([T('c_time'), T('c_actor'), T('c_msg')],
+        (o.events||[]).map(e => [`<span class="mono">${when(e.ts)}</span>`,
+          esc(e.actor||'—'), esc(e.message)]));
+  }
+
+  document.getElementById('inbounds').innerHTML = table(
+    [T('c_name'),T('c_proto'),T('c_port'),T('c_transport'),T('c_security'),
+     T('c_node'),T('c_clients'),T('c_state'),''],
+    D.inbounds.map(i => [
+      esc(i.remark) + (i.private ? ` <span class="tag warn">${T('priv')}</span>` : ''),
+      `<span class="mono">${esc(i.protocol)}</span>`,
+      `<span class="mono">${i.port}</span>`,
+      `<span class="mono">${esc(i.transport)}</span>`,
+      `<span class="mono">${esc(i.security)}</span>`,
+      esc(i.node_name), i.clients,
+      i.enabled ? `<span class="tag ok">${T('on')}</span>` : `<span class="tag">${T('off')}</span>`,
+      `<div class="row-actions">
+         <button class="btn-s" onclick="toggleInbound(${i.id})">${i.enabled?T('disable'):T('enable')}</button>
+         <button class="btn-s" onclick="delInbound(${i.id})">${T('del')}</button>
+       </div>`
+    ]));
+  document.getElementById('inb-count').textContent =
+    `${D.inbounds.length} ${T('count_inb')}`;
+
+  document.getElementById('users').innerHTML = table(
+    [T('c_user'),T('c_inbound'),T('c_usage'),T('c_quota'),T('c_expiry'),T('c_state'),''],
+    D.users.map(u => [
+      esc(u.email), esc(u.inbound || '—'),
+      `<span class="mono">${bytes(u.total)}</span>`,
+      quotaCell(u), expiryCell(u), stateTag(u),
+      `<div class="row-actions">
+         <button class="btn-s" onclick="showQR(${u.id})">${T('qr')}</button>
+         <button class="btn-s" onclick="editUser(${u.id})">${T('edit')}</button>
+         <button class="btn-s" onclick="toggleUser(${u.id})">${u.enabled?T('disable'):T('enable')}</button>
+         <button class="btn-s" onclick="resetUser(${u.id})">${T('reset')}</button>
+         <button class="btn-s" onclick="rotateUser(${u.id})">${T('rotate')}</button>
+         <button class="btn-s" onclick="delUser(${u.id})">${T('del')}</button>
+       </div>`
+    ]));
+  document.getElementById('usr-count').textContent =
+    `${D.users.length} ${T('count_usr')}`;
+
+  document.getElementById('nodes').innerHTML = table(
+    [T('c_name'),T('c_addr'),T('c_state'),T('c_seen'),T('c_clients')],
+    D.nodes.map(n => {
+      const cls = n.status === 'up' ? 'ok' : (n.status === 'down' ? 'bad' : 'warn');
+      return [esc(n.name), `<span class="mono">${esc(n.address)}</span>`,
+        `<span class="tag ${cls}">${T(n.status) || esc(n.status)}</span>`,
+        `<span class="mono">${when(n.last_seen)}</span>`, n.inbounds];
+    }));
+
+  document.getElementById('logs').innerHTML = table(
+    [T('c_time'),T('c_level'),T('c_actor'),T('c_msg')],
+    D.events.map(e => {
+      const cls = e.level === 'error' ? 'bad' : (e.level === 'warn' ? 'warn' : 'ok');
+      return [`<span class="mono">${when(e.ts)}</span>`,
+        `<span class="tag ${cls}">${esc(e.level)}</span>`,
+        esc(e.actor||'—'), esc(e.message) +
+        (e.meta ? ` <span style="opacity:.5" class="mono">${esc(e.meta)}</span>` : '')];
+    }));
+}
+
+async function loadAll(){
+  try{
+    const [me, ov, inb, us, nd, ev] = await Promise.all([
+      api('/api/me'), api('/api/overview'), api('/api/inbounds'),
+      api('/api/users'), api('/api/nodes'), api('/api/events?limit=120')
+    ]);
+    document.getElementById('who').textContent = '@' + me.username;
+    D.overview = ov; D.inbounds = inb.inbounds || []; D.users = us.users || [];
+    D.nodes = nd.nodes || []; D.events = ev.events || [];
+    render();
+  }catch(e){ if(e.message !== 'unauthorized') toast(e.message, true); }
+}
+
+/* ── actions ────────────────────────────────────────────────────────── */
+async function toggleUser(id){
+  try{ await api('/api/users/'+id+'/toggle',{method:'POST'}); await loadAll(); }
+  catch(e){ toast(e.message, true); }
+}
+async function resetUser(id){
+  try{ await api('/api/users/'+id+'/reset',{method:'POST'}); toast('✓'); await loadAll(); }
+  catch(e){ toast(e.message, true); }
+}
+async function toggleInbound(id){
+  try{ await api('/api/inbounds/'+id+'/toggle',{method:'POST'}); await loadAll(); }
+  catch(e){ toast(e.message, true); }
+}
+async function showLink(id){
+  try{
+    const j = await api('/api/users/'+id+'/link');
+    const box = document.getElementById('linkout');
+    box.innerHTML = `<div class="linkbox"><div style="font-size:11.5px;opacity:.7;margin-bottom:6px">
+      ${esc(j.email)}</div><div class="mono" id="lk">${esc(j.link)}</div>
+      <button class="btn-s" style="margin-top:9px" onclick="copyLink()">${T('copy')}</button></div>`;
+    box.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }catch(e){ toast(e.message, true); }
+}
+function copyLink(){
+  const t = document.getElementById('lk').textContent;
+  navigator.clipboard.writeText(t).then(() => toast(T('copied')));
+}
+/* ── modals ─────────────────────────────────────────────────────────── */
+let TEMPLATES = [];
+function openM(id){ document.getElementById(id).classList.add('open'); }
+function closeM(id){
+  const m = document.getElementById(id);
+  m.classList.remove('open');
+  const e = m.querySelector('.err-line'); if(e) e.style.display='none';
+}
+document.querySelectorAll('.backdrop').forEach(b => b.addEventListener('click', ev => {
+  if(ev.target === b) closeM(b.id);
+}));
+document.addEventListener('keydown', ev => {
+  if(ev.key === 'Escape') document.querySelectorAll('.backdrop.open')
+    .forEach(b => closeM(b.id));
+});
+function showErr(boxId, msg){
+  const e = document.getElementById(boxId);
+  e.textContent = msg; e.style.display = 'block';
+}
+
+function syncInbForm(){
+  const t = TEMPLATES.find(x => x.name === document.getElementById('tplSel').value);
+  if(!t) return;
+  document.getElementById('tplDesc').textContent = t.description;
+  document.getElementById('sniRow').style.display = t.needs_sni ? '' : 'none';
+  const form = document.getElementById('tplSel').form;
+  form.sni.required = !!t.needs_sni;
+}
+
+async function openInboundModal(){
+  try{
+    if(!TEMPLATES.length){
+      const j = await api('/api/templates'); TEMPLATES = j.templates || [];
+      document.getElementById('tplSel').innerHTML = TEMPLATES.map(t =>
+        `<option value="${esc(t.name)}">${esc(t.name)} — ${esc(t.core)}</option>`).join('');
+    }
+    document.getElementById('nodeSel').innerHTML = D.nodes.map(n =>
+      `<option value="${n.id}">${n.id === 0 ? T('thisserver') : esc(n.name)}</option>`).join('');
+    syncInbForm(); openM('m-inbound');
+  }catch(e){ toast(e.message, true); }
+}
+document.getElementById('newInbBtn').onclick = openInboundModal;
+
+document.getElementById('newUsrBtn').onclick = () => {
+  const usable = D.inbounds.filter(i => i.enabled);
+  if(!usable.length){ toast(T('none'), true); return; }
+  document.getElementById('inbSel').innerHTML = usable.map(i =>
+    `<option value="${i.id}">${esc(i.remark)} — ${esc(i.protocol)}:${i.port}</option>`).join('');
+  openM('m-user');
+};
+
+function formJSON(form){
+  const o = {};
+  new FormData(form).forEach((v,k) => { o[k] = v; });
+  form.querySelectorAll('input[type=checkbox]').forEach(c => {
+    if(!c.checked) o[c.name] = 'false';
+  });
+  return o;
+}
+
+async function submitInbound(ev){
+  ev.preventDefault();
+  const form = ev.target;
+  try{
+    const j = await api('/api/inbounds', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify(formJSON(form))});
+    closeM('m-inbound'); form.reset(); toast(T('created'));
+    await loadAll();
+  }catch(e){ showErr('inb-err', e.message); }
+  return false;
+}
+
+async function submitUser(ev){
+  ev.preventDefault();
+  const form = ev.target;
+  try{
+    const j = await api('/api/users', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify(formJSON(form))});
+    closeM('m-user'); form.reset(); toast(`${T('created')}: ${j.created.length}`);
+    await loadAll();
+  }catch(e){ showErr('usr-err', e.message); }
+  return false;
+}
+
+function editUser(id){
+  const u = D.users.find(x => x.id === id); if(!u) return;
+  document.getElementById('edit-id').value = id;
+  document.getElementById('edit-who').textContent = u.email + ' — ' + (u.inbound||'');
+  document.getElementById('edit-quota').value = u.quota ? (u.quota/(1024**3)).toFixed(2) : 0;
+  document.getElementById('edit-ip').value = 0;
+  document.getElementById('edit-days').value = 30;
+  openM('m-edit');
+}
+
+async function submitEdit(ev){
+  ev.preventDefault();
+  const form = ev.target;
+  const id = document.getElementById('edit-id').value;
+  try{
+    await api('/api/users/'+id+'/update', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify(formJSON(form))});
+    closeM('m-edit'); toast(T('saved')); await loadAll();
+  }catch(e){ showErr('edit-err', e.message); }
+  return false;
+}
+
+async function showQR(id){
+  try{
+    const j = await api('/api/users/'+id+'/qr');
+    document.getElementById('qr-title').textContent = j.email;
+    document.getElementById('qr-svg').innerHTML = j.svg;
+    document.getElementById('qr-link').textContent = j.link;
+    openM('m-qr');
+  }catch(e){ toast(e.message, true); }
+}
+function copyQR(){
+  navigator.clipboard.writeText(document.getElementById('qr-link').textContent)
+    .then(() => toast(T('copied')));
+}
+
+async function delUser(id){
+  if(!confirm(T('confirm_del_user'))) return;
+  try{ await api('/api/users/'+id+'/delete',{method:'POST'});
+       toast(T('deleted')); await loadAll(); }
+  catch(e){ toast(e.message, true); }
+}
+async function delInbound(id){
+  if(!confirm(T('confirm_del_inb'))) return;
+  try{ await api('/api/inbounds/'+id+'/delete',{method:'POST'});
+       toast(T('deleted')); await loadAll(); }
+  catch(e){ toast(e.message, true); }
+}
+async function rotateUser(id){
+  if(!confirm(T('confirm_rotate'))) return;
+  try{ await api('/api/users/'+id+'/rotate',{method:'POST'});
+       toast(T('rotated')); await loadAll(); }
+  catch(e){ toast(e.message, true); }
+}
+
+document.getElementById('refreshBtn').onclick = loadAll;
+document.getElementById('outBtn').onclick = async () => {
+  try{ await fetch('/api/logout',{method:'POST'}); }catch(e){}
+  location.href = '/hp-ui/login';
+};
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
+  document.querySelectorAll('.panel').forEach(p =>
+    p.classList.toggle('on', p.id === 'p-' + t.dataset.p));
+});
+
+applyTheme(localStorage.getItem('hpui-theme') || 'dark');
+applyLang();
+loadAll();
+setInterval(loadAll, 30000);
+</script>
+</body>
+</html>

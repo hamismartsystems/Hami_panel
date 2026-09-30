@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/hamismartsystems/hami_panel/internal/reality"
-	"github.com/hamismartsystems/hami_panel/internal/store"
+	"github.com/hamismartsystems/hami_panel/internal/provision"
 	tpl "github.com/hamismartsystems/hami_panel/internal/template"
 )
 
@@ -71,11 +70,6 @@ func templateApply(args []string) int {
 		templateUsage()
 		return 2
 	}
-	tmpl, err := tpl.ByName(*tName)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		return 1
-	}
 	st, ok := openDBOr(*dbPath)
 	if !ok {
 		return 1
@@ -88,100 +82,22 @@ func templateApply(args []string) int {
 		return 1
 	}
 
-	// auto-generate Reality keys if template needs them and none provided
-	var privKey, pubKey, shortID string
-	if tmpl.Security == "reality" {
-		privKey = *priv
-		pubKey = *pbk
-		shortID = *sid
-		if privKey == "" || pubKey == "" {
-			pk, pub, err := reality.GenerateKeypair()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "keypair: %v\n", err)
-				return 1
-			}
-			if privKey == "" {
-				privKey = pk
-			}
-			if pubKey == "" {
-				pubKey = pub
-			}
-		}
-		if shortID == "" {
-			s, err := reality.GenerateShortID(4)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "shortid: %v\n", err)
-				return 1
-			}
-			shortID = s
-		}
-	}
-
-	obfsT := tmpl.ObfsType
-	if *obfsType != "" {
-		obfsT = *obfsType
-	}
-	obfsP := tmpl.ObfsPassword
-	if *obfsPassword != "" {
-		obfsP = *obfsPassword
-	}
-	alpnV := tmpl.Alpn
-	if *alpn != "" {
-		alpnV = *alpn
-	}
-	ccV := tmpl.CongestionControl
-	if *cc != "" {
-		ccV = *cc
-	}
-	isPriv := *isPrivate
-	// sing-box dedicated templates are private by default if user wants, but explicit flag wins
-	if tmpl.Protocol == "hysteria2" || tmpl.Protocol == "tuic" || tmpl.Protocol == "anytls" {
-		// keep as set by flag
-	}
-
-	in := &store.Inbound{
-		NodeID:            nodeID,
-		Remark:            *remark,
-		Protocol:          tmpl.Protocol,
-		Port:              *port,
-		Host:              *host,
-		Transport:         tmpl.Transport,
-		Security:          tmpl.Security,
-		SNI:               *sni,
-		PublicKey:         pubKey,
-		ShortID:           shortID,
-		Fingerprint:       tmpl.Fingerprint,
-		Path:              tmpl.Path,
-		XHTTPMode:         tmpl.XHTTPMode,
-		HeaderType:        tmpl.HeaderType,
-		Flow:              tmpl.Flow,
-		ObfsType:          obfsT,
-		ObfsPassword:      obfsP,
-		Alpn:              alpnV,
-		CongestionControl: ccV,
-		IsPrivate:         isPriv,
-	}
-	if err := st.CreateInbound(in); err != nil {
-		fmt.Fprintf(os.Stderr, "create: %v\n", err)
+	in, err := provision.Inbound(st, provision.InboundOptions{
+		Template: *tName, Remark: *remark, Host: *host, Port: *port,
+		SNI: *sni, Dest: *dest, NodeID: nodeID, Listen: *listen,
+		CertFile: *certFile, KeyFile: *keyFile, Private: *isPrivate,
+		PrivateKey: *priv, PublicKey: *pbk, ShortID: *sid,
+		ObfsType: *obfsType, ObfsPassword: *obfsPassword,
+		Alpn: *alpn, CongestionControl: *cc,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		return 1
 	}
-	// secrets: reality private key + dest, or TLS cert for sing-box
-	if tmpl.Security == "reality" || *certFile != "" || *keyFile != "" || privKey != "" || *dest != "" {
-		if err := st.SetInboundSecret(store.InboundSecret{
-			InboundID:  in.ID,
-			PrivateKey: privKey,
-			Dest:       *dest,
-			Listen:     *listen,
-			CertFile:   *certFile,
-			KeyFile:    *keyFile,
-		}); err != nil {
-			fmt.Fprintf(os.Stderr, "secret: %v\n", err)
-			return 1
-		}
-	}
+	tmpl, _ := tpl.ByName(*tName)
 	logEvent(*dbPath, "info", "template", fmt.Sprintf("applied %s as inbound %d (%s)", tmpl.Name, in.ID, *remark), "")
-	fmt.Printf("✅ template %s -> inbound %d (pbk=%s sid=%s)\n", tmpl.Name, in.ID, pubKey, shortID)
-	if tmpl.Security == "reality" && privKey != "" {
+	fmt.Printf("✅ template %s -> inbound %d (pbk=%s sid=%s)\n", tmpl.Name, in.ID, in.PublicKey, in.ShortID)
+	if tmpl.Security == "reality" {
 		fmt.Printf("   private key kept server-side only\n")
 	}
 	return 0

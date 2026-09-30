@@ -1,4 +1,5 @@
 # binaries & build output
+/hami
 /hami-panel
 /dist/
 /bin/
