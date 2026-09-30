@@ -57,7 +57,7 @@ func webServe(args []string) int {
 	defer st.Close()
 
 	subSrv := &subs.Server{Store: st, BaseURL: *baseURL}
-	webHandler := web.Handler(st)
+	webHandler := web.HandlerWithDB(st, *dbPath)
 
 	mux := http.NewServeMux()
 	mux.Handle("/hp-ui/", webHandler)

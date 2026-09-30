@@ -47,6 +47,12 @@ func Handler(st *store.Store) http.Handler {
 	return (&Server{Store: st}).Routes()
 }
 
+// HandlerWithDB is Handler plus the path of the database file, which the
+// importer needs so it can copy it aside before writing to it.
+func HandlerWithDB(st *store.Store, dbPath string) http.Handler {
+	return (&Server{Store: st, DBPath: dbPath}).Routes()
+}
+
 // Routes builds the mux for a configured Server (lets callers set Secure).
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
@@ -97,6 +103,11 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/users/{id}/update", s.requireAdmin(s.apiUserUpdate))
 	mux.HandleFunc("POST /api/users/{id}/delete", s.requireAdmin(s.apiUserDelete))
 	mux.HandleFunc("POST /api/users/{id}/rotate", s.requireAdmin(s.apiUserRotate))
+
+	// migrating in from another panel
+	mux.HandleFunc("POST /api/import/preview", s.requireAdmin(s.apiImportPreview))
+	mux.HandleFunc("POST /api/import/apply", s.requireAdmin(s.apiImportApply))
+	mux.HandleFunc("POST /api/import/cancel", s.requireAdmin(s.apiImportCancel))
 
 	return securityHeaders(mux)
 }

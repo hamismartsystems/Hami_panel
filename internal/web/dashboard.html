@@ -152,6 +152,24 @@
     display:none}
   body[data-theme="light"] .err-line{background:#FADBD6;border-color:#E7A99F;color:#7A1D14}
   @media(max-width:640px){main{padding:14px}.header{padding:12px 14px}.tabs{padding:12px 14px 0}}
+  .mg-steps{display:flex;align-items:center;gap:8px;margin:14px 0 18px}
+  .mg-steps i{flex:0 0 42px;height:2px;background:var(--line);display:block}
+  .mg-step{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;
+    font-size:13px;font-weight:700;background:var(--line);color:var(--muted);transition:.2s}
+  .mg-step.on{background:var(--accent);color:#06210f}
+  .mg-step.done{background:rgba(46,160,67,.85);color:#fff}
+  .mg-meta{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+  .mg-meta span{font-size:12px;padding:5px 10px;border-radius:999px;
+    background:var(--line);color:var(--text)}
+  .mg-note{border-radius:12px;padding:10px 12px;margin-top:10px;font-size:13px;line-height:1.75}
+  .mg-note.warn{background:rgba(214,158,46,.14);border:1px solid rgba(214,158,46,.4)}
+  .mg-note.skip{background:rgba(120,120,120,.12);border:1px solid var(--line)}
+  .mg-note.bad{background:rgba(192,57,43,.14);border:1px solid rgba(192,57,43,.45)}
+  .mg-note.good{background:rgba(46,160,67,.14);border:1px solid rgba(46,160,67,.45)}
+  .mg-note ul{margin:6px 0 0;padding-inline-start:18px}
+  .mg-note b{display:block;margin-bottom:2px}
+  .chk{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;cursor:pointer}
+  .chk input{width:auto;margin:0}
 </style>
 </head>
 <body data-theme="dark">
@@ -176,6 +194,7 @@
   <button class="tab" data-p="users" data-i18n="t_users">Users</button>
   <button class="tab" data-p="nodes" data-i18n="t_nodes">Nodes</button>
   <button class="tab" data-p="logs" data-i18n="t_logs">Logs</button>
+  <button class="tab" data-p="migrate" data-i18n="t_migrate">Migrate</button>
 </div>
 
 <main>
@@ -221,6 +240,78 @@
 
   <section class="panel" id="p-logs">
     <div class="card"><div class="scroll" id="logs"></div></div>
+  </section>
+
+  <section class="panel" id="p-migrate">
+    <div class="card">
+      <h2 class="sec" data-i18n="mg_title">Bring another panel over</h2>
+      <p class="hint" data-i18n="mg_intro">Reads 3x-ui, x-ui and marzban. The other
+        panel is only ever read: it is copied first, the copy is opened read-only,
+        and its checksum is compared before and after.</p>
+
+      <div class="err-line" id="mg-err"></div>
+
+      <div class="mg-steps">
+        <span class="mg-step on" id="mg-s1">1</span><i></i>
+        <span class="mg-step" id="mg-s2">2</span><i></i>
+        <span class="mg-step" id="mg-s3">3</span>
+      </div>
+
+      <form id="mgForm" onsubmit="return mgPreview(event)">
+        <div class="fgrid">
+          <div class="field">
+            <label data-i18n="mg_file">Panel database</label>
+            <input type="file" name="db" id="mgFile" accept=".db,.sqlite,.sqlite3,application/octet-stream">
+            <small data-i18n="mg_file_hint">Upload x-ui.db or db.sqlite3</small>
+          </div>
+          <div class="field">
+            <label data-i18n="mg_path">…or a path on this server</label>
+            <input name="path" id="mgPath" placeholder="/etc/x-ui/x-ui.db">
+            <small data-i18n="mg_path_hint">Use this when the panel runs here</small>
+          </div>
+        </div>
+        <div class="fgrid">
+          <div class="field">
+            <label data-i18n="mg_host">Address for clients</label>
+            <input name="host" id="mgHost" placeholder="">
+            <small data-i18n="mg_host_hint">Leave empty to keep what the old panel advertises</small>
+          </div>
+          <div class="field">
+            <label data-i18n="mg_flow">Flow</label>
+            <select name="flow" id="mgFlow">
+              <option value="" data-i18n="mg_flow_auto">Keep what most clients use</option>
+              <option value="xtls-rprx-vision">xtls-rprx-vision</option>
+              <option value="none" data-i18n="mg_flow_none">No flow</option>
+            </select>
+            <small data-i18n="mg_flow_hint">Only matters when the old panel mixes them</small>
+          </div>
+        </div>
+        <div class="fgrid">
+          <div class="field">
+            <label data-i18n="mg_node">Node</label>
+            <select name="node" id="mgNode"><option value="" data-i18n="mg_node_this">This server</option></select>
+          </div>
+          <div class="field">
+            <label data-i18n="mg_xray">Marzban xray_config.json</label>
+            <input type="file" name="xray" id="mgXray" accept=".json,application/json">
+            <small data-i18n="mg_xray_hint">Marzban only — it keeps inbound definitions there</small>
+          </div>
+        </div>
+        <label class="chk"><input type="checkbox" name="keep_subs" id="mgKeep" checked>
+          <span data-i18n="mg_keep">Keep subscription links working</span></label>
+        <div class="mrow">
+          <button class="btn primary" type="submit" id="mgPreviewBtn" data-i18n="mg_look">Look inside</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card" id="mgResult" style="display:none;margin-top:14px">
+      <h2 class="sec" data-i18n="mg_found">What is in there</h2>
+      <div id="mgMeta" class="mg-meta"></div>
+      <div class="scroll" id="mgTable"></div>
+      <div id="mgNotes"></div>
+      <div class="mrow" id="mgActions"></div>
+    </div>
   </section>
 </main>
 
@@ -363,7 +454,27 @@ const I18N = {
       confirm_del_user:"Delete this user? Their link stops working immediately.",
       confirm_del_inb:"Delete this inbound and all of its users?",
       confirm_rotate:"Issue a new token? The old link stops working immediately.",
-      count_inb:"inbounds",count_usr:"users"},
+      count_inb:"inbounds",count_usr:"users",
+      t_migrate:"Migrate",
+      mg_title:"Bring another panel over",
+      mg_intro:"Reads 3x-ui, x-ui and marzban. The other panel is only ever read: it is copied first, the copy is opened read-only, and its checksum is compared before and after.",
+      mg_file:"Panel database",mg_file_hint:"Upload x-ui.db or db.sqlite3",
+      mg_path:"…or a path on this server",mg_path_hint:"Use this when the panel runs here",
+      mg_host:"Address for clients",mg_host_hint:"Leave empty to keep what the old panel advertises",
+      mg_flow:"Flow",mg_flow_auto:"Keep what most clients use",mg_flow_none:"No flow",
+      mg_flow_hint:"Only matters when the old panel mixes them",
+      mg_node:"Node",mg_node_this:"This server",
+      mg_xray:"Marzban xray_config.json",mg_xray_hint:"Marzban only — it keeps inbound definitions there",
+      mg_keep:"Keep subscription links working",
+      mg_look:"Look inside",mg_looking:"Reading…",mg_found:"What is in there",
+      mg_import:"Import them",mg_importing:"Importing…",mg_again:"Start over",
+      mg_will:"Will create",mg_already:"Already here",
+      mg_warn:"Worth a look",mg_skip:"Not imported",mg_conflict:"Settle these first",
+      mg_nothing:"Nothing new — everything in that panel is already here.",
+      mg_done:"Imported",mg_verified:"Read back and checked against the source: quotas, usage, expiry, device limits and on/off all match.",
+      mg_backup:"Your database as it was before this run",
+      mg_confirm:"Import these into your panel?",
+      mg_nofile:"Choose a file, or type a path on this server."},
   fa:{tagline:"کنترل اچ‌پی‌یوآی",refresh:"تازه‌سازی",signout:"خروج",
       t_overview:"نمای کلی",t_inbounds:"ورودی‌ها",t_users:"کاربران",t_nodes:"گره‌ها",t_logs:"رویدادها",
       k_users:"کاربران",k_inbounds:"ورودی‌ها",k_nodes:"گره‌ها",k_traffic:"ترافیک",
@@ -394,7 +505,27 @@ const I18N = {
       confirm_del_user:"این کاربر حذف شود؟ لینکش بی‌درنگ از کار می‌افتد.",
       confirm_del_inb:"این ورودی و همه کاربرانش حذف شوند؟",
       confirm_rotate:"نشانه تازه صادر شود؟ لینک قبلی بی‌درنگ از کار می‌افتد.",
-      count_inb:"ورودی",count_usr:"کاربر"}
+      count_inb:"ورودی",count_usr:"کاربر",
+      t_migrate:"کوچ",
+      mg_title:"آوردن یک پنل دیگر",
+      mg_intro:"پنل‌های ثنائی و علیرضا و مرزبان را می‌خواند. پنل قبلی فقط خوانده می‌شود: اول کپی می‌شود، کپی فقط‌خواندنی باز می‌شود، و چک‌سام فایل اصلی قبل و بعد مقایسه می‌شود.",
+      mg_file:"پایگاه دادهٔ پنل",mg_file_hint:"فایل پنل قبلی را بفرستید",
+      mg_path:"یا نشانی فایل روی همین سرور",mg_path_hint:"اگر پنل قبلی روی همین سرور است",
+      mg_host:"نشانی برای مشتری‌ها",mg_host_hint:"خالی بگذارید تا همان نشانی پنل قبلی بماند",
+      mg_flow:"فلو",mg_flow_auto:"همانی که بیشتر کاربرها دارند",mg_flow_none:"بدون فلو",
+      mg_flow_hint:"فقط وقتی مهم است که پنل قبلی قاطی کرده باشد",
+      mg_node:"گره",mg_node_this:"همین سرور",
+      mg_xray:"فایل پیکربندی مرزبان",mg_xray_hint:"فقط مرزبان — تعریف ورودی‌ها آنجاست",
+      mg_keep:"لینک‌های اشتراک مشتری‌ها کار کند",
+      mg_look:"نگاهی بینداز",mg_looking:"در حال خواندن…",mg_found:"چه چیزی داخلش هست",
+      mg_import:"همه را بیاور",mg_importing:"در حال آوردن…",mg_again:"از نو",
+      mg_will:"ساخته می‌شود",mg_already:"از قبل هست",
+      mg_warn:"جای نگاه کردن دارد",mg_skip:"آورده نشد",mg_conflict:"اول این‌ها را حل کنید",
+      mg_nothing:"چیز تازه‌ای نیست — هرچه در آن پنل بود همین‌جا هست.",
+      mg_done:"آورده شد",mg_verified:"دوباره خوانده و با مبدأ مقایسه شد: سهمیه، مصرف، انقضا، سقف دستگاه و روشن یا خاموش بودن همه یکی است.",
+      mg_backup:"پایگاه دادهٔ شما، پیش از این اجرا",
+      mg_confirm:"این‌ها به پنل شما اضافه شوند؟",
+      mg_nofile:"یک فایل انتخاب کنید یا نشانی فایلی روی همین سرور را بنویسید."}
 };
 let lang = localStorage.getItem('hpui-lang') || 'en';
 const T = k => (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k;
@@ -633,6 +764,7 @@ async function openInboundModal(){
       document.getElementById('tplSel').innerHTML = TEMPLATES.map(t =>
         `<option value="${esc(t.name)}">${esc(t.name)} — ${esc(t.core)}</option>`).join('');
     }
+    mgFillNodes();
     document.getElementById('nodeSel').innerHTML = D.nodes.map(n =>
       `<option value="${n.id}">${n.id === 0 ? T('thisserver') : esc(n.name)}</option>`).join('');
     syncInbForm(); openM('m-inbound');
@@ -751,6 +883,134 @@ applyTheme(localStorage.getItem('hpui-theme') || 'dark');
 applyLang();
 loadAll();
 setInterval(loadAll, 30000);
+
+/* ── migrate from another panel ─────────────────────────────────────── */
+let MG = null;               // the live preview: {session, expect}
+function mgStep(n){
+  [1,2,3].forEach(i => {
+    const el = document.getElementById('mg-s'+i);
+    el.classList.toggle('on', i === n);
+    el.classList.toggle('done', i < n);
+  });
+}
+function mgError(msg){
+  const e = document.getElementById('mg-err');
+  if(!msg){ e.style.display = 'none'; return; }
+  e.textContent = msg; e.style.display = 'block';
+}
+function mgNote(kind, title, items){
+  if(!items || !items.length) return '';
+  return `<div class="mg-note ${kind}"><b>${esc(title)}</b><ul>` +
+    items.map(x => `<li>${esc(x)}</li>`).join('') + `</ul></div>`;
+}
+async function mgPreview(ev){
+  ev.preventDefault();
+  mgError('');
+  const form = document.getElementById('mgForm');
+  const fd = new FormData(form);
+  if(!document.getElementById('mgFile').files.length && !fd.get('path')){
+    mgError(T('mg_nofile')); return false;
+  }
+  if(!document.getElementById('mgXray').files.length) fd.delete('xray');
+  if(!document.getElementById('mgFile').files.length) fd.delete('db');
+  fd.set('keep_subs', document.getElementById('mgKeep').checked ? '1' : '0');
+
+  const btn = document.getElementById('mgPreviewBtn');
+  btn.disabled = true; btn.textContent = T('mg_looking');
+  try{
+    const j = await api('/api/import/preview', {method:'POST', body:fd});
+    MG = {session:j.session, expect:j.plan.new_clients};
+    mgRender(j);
+    mgStep(2);
+  }catch(e){ mgError(e.message); mgStep(1); }
+  finally{ btn.disabled = false; btn.textContent = T('mg_look'); }
+  return false;
+}
+function mgRender(j){
+  document.getElementById('mgResult').style.display = '';
+  document.getElementById('mgMeta').innerHTML =
+    `<span>${esc(j.panel)}</span><span>${esc(j.variant)}</span>` +
+    `<span>${esc(j.source)}</span><span>${esc(j.checksum)}…</span>`;
+
+  document.getElementById('mgTable').innerHTML = table(
+    [T('c_name'),T('c_port'),T('c_proto'),T('c_transport'),T('c_security'),T('c_addr'),T('c_clients')],
+    j.inbounds.map(i => [esc(i.remark), i.port, esc(i.protocol), esc(i.transport),
+      esc(i.security), esc(i.host), i.clients]));
+
+  const p = j.plan;
+  let notes = `<div class="mg-note good"><b>${T('mg_will')}</b>` +
+    `<ul><li>${p.new_inbounds} ${T('count_inb')} · ${p.new_clients} ${T('count_usr')}</li></ul></div>`;
+  if(p.existing_inbounds || p.existing_clients){
+    notes += mgNote('skip', T('mg_already'),
+      [`${p.existing_inbounds} ${T('count_inb')} · ${p.existing_clients} ${T('count_usr')}`]
+        .concat(p.existing_names || []));
+  }
+  notes += mgNote('warn', T('mg_warn'), j.warnings);
+  notes += mgNote('skip', T('mg_skip'),
+    (j.skipped || []).map(k => `${k.what} ${k.ref} — ${k.reason}`));
+  notes += mgNote('bad', T('mg_conflict'), p.conflicts);
+  document.getElementById('mgNotes').innerHTML = notes;
+
+  const acts = document.getElementById('mgActions');
+  const blocked = (p.conflicts && p.conflicts.length) || (!p.new_inbounds && !p.new_clients);
+  acts.innerHTML =
+    (blocked ? '' : `<button class="btn primary" id="mgGo" onclick="mgApply()">${T('mg_import')}</button>`) +
+    `<button class="btn" onclick="mgReset()">${T('mg_again')}</button>`;
+  if(!p.new_inbounds && !p.new_clients && !(p.conflicts||[]).length){
+    document.getElementById('mgNotes').insertAdjacentHTML('afterbegin',
+      `<div class="mg-note skip">${T('mg_nothing')}</div>`);
+  }
+}
+async function mgApply(){
+  if(!MG) return;
+  if(!confirm(T('mg_confirm'))) return;
+  const go = document.getElementById('mgGo');
+  go.disabled = true; go.textContent = T('mg_importing');
+  const fd = new FormData();
+  fd.set('session', MG.session);
+  fd.set('expect_clients', MG.expect);
+  fd.set('host', document.getElementById('mgHost').value.trim());
+  fd.set('flow', document.getElementById('mgFlow').value);
+  fd.set('node', document.getElementById('mgNode').value);
+  fd.set('keep_subs', document.getElementById('mgKeep').checked ? '1' : '0');
+  try{
+    const j = await api('/api/import/apply', {method:'POST', body:fd});
+    mgStep(3);
+    let html = `<div class="mg-note good"><b>${T('mg_done')}</b><ul>` +
+      `<li>${j.created_inbounds} ${T('count_inb')} · ${j.created_clients} ${T('count_usr')}</li></ul></div>`;
+    if(j.verified) html += `<div class="mg-note good">${T('mg_verified')}</div>`;
+    if(j.backup) html += `<div class="mg-note skip"><b>${T('mg_backup')}</b><ul><li>${esc(j.backup)}</li></ul></div>`;
+    document.getElementById('mgNotes').innerHTML = html;
+    document.getElementById('mgActions').innerHTML =
+      `<button class="btn" onclick="mgReset()">${T('mg_again')}</button>`;
+    toast(T('mg_done'));
+    MG = null;
+    loadAll();
+  }catch(e){
+    mgError(e.message);
+    go.disabled = false; go.textContent = T('mg_import');
+  }
+}
+function mgReset(){
+  if(MG){
+    const fd = new FormData(); fd.set('session', MG.session);
+    fetch('/api/import/cancel', {method:'POST', body:fd}).catch(()=>{});
+    MG = null;
+  }
+  document.getElementById('mgForm').reset();
+  document.getElementById('mgKeep').checked = true;
+  document.getElementById('mgResult').style.display = 'none';
+  mgError(''); mgStep(1);
+}
+function mgFillNodes(){
+  const sel = document.getElementById('mgNode');
+  if(!sel || !D.nodes) return;
+  const cur = sel.value;
+  sel.innerHTML = `<option value="">${T('mg_node_this')}</option>` +
+    D.nodes.map(n => `<option value="${esc(n.name)}">${esc(n.name)}</option>`).join('');
+  sel.value = cur;
+}
+
 </script>
 </body>
 </html>

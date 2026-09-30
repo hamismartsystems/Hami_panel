@@ -24,8 +24,12 @@ const RememberTTL = 30 * 24 * time.Hour
 type Server struct {
 	Store  *store.Store
 	Secure bool // set true behind HTTPS so the cookie gets the Secure flag
+	// DBPath is where Store keeps its file. The importer copies it aside
+	// before writing, so an import can always be undone.
+	DBPath string
 
 	limiter loginLimiter
+	imports importSessions
 }
 
 /* ── brute-force throttle ────────────────────────────────────────────── */
