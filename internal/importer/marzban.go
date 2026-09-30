@@ -4,9 +4,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/hamismartsystems/hami_panel/internal/store"
 )
@@ -140,12 +142,20 @@ func (m *marzbanSource) Read(db *sql.DB, opt Options) (*Snapshot, error) {
 			continue
 		}
 		if h.address != "" {
-			if hasPlaceholder(h.address) {
+			addr := resolveServerIP(h.address)
+			switch {
+			case !hasPlaceholder(addr):
+				in.Host = addr
+				if addr != h.address {
+					snap.Warnings = append(snap.Warnings, fmt.Sprintf(
+						"tag %s: marzban stores the address as %q; filled in this "+
+							"server's own address, %s", tag, h.address, addr))
+				}
+			default:
 				snap.Warnings = append(snap.Warnings, fmt.Sprintf(
-					"tag %s: marzban stores the address as the template %q; "+
-						"set the address yourself with -host", tag, h.address))
-			} else {
-				in.Host = h.address
+					"tag %s: marzban stores the address as the template %q, which only "+
+						"marzban can fill in; set the address yourself with -host",
+					tag, h.address))
 			}
 		}
 		if h.port > 0 {
@@ -230,6 +240,55 @@ type marzbanHost struct {
 // link, so an unsubstituted one is not a usable value.
 func hasPlaceholder(v string) bool {
 	return strings.ContainsRune(v, '{') && strings.ContainsRune(v, '}')
+}
+
+// resolveServerIP does what marzban itself does with {SERVER_IP}: fill in
+// the address of the machine the panel runs on. Anything else stays a
+// template, because the remaining placeholders are per-customer and have
+// no meaning for an inbound.
+func resolveServerIP(addr string) string {
+	if !strings.Contains(addr, "{SERVER_IP}") {
+		return addr
+	}
+	ip := ownAddressFn()
+	if ip == "" {
+		return addr
+	}
+	return strings.ReplaceAll(addr, "{SERVER_IP}", ip)
+}
+
+// ownAddressFn is swapped in tests so they do not depend on the address
+// of whatever machine happens to run them.
+var ownAddressFn = ownAddress
+
+var (
+	ownAddrOnce sync.Once
+	ownAddrVal  string
+)
+
+// ownAddress finds the address this machine uses to reach the internet.
+// The dial sends nothing; it only asks the kernel which route, and so
+// which source address, an outbound packet would take. A private or
+// loopback answer is discarded, since handing a customer a private
+// address is worse than admitting we do not know.
+func ownAddress() string {
+	ownAddrOnce.Do(func() {
+		conn, err := net.Dial("udp", "198.51.100.1:9")
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		host, _, err := net.SplitHostPort(conn.LocalAddr().String())
+		if err != nil {
+			return
+		}
+		ip := net.ParseIP(host)
+		if ip == nil || !ip.IsGlobalUnicast() || ip.IsPrivate() {
+			return
+		}
+		ownAddrVal = ip.String()
+	})
+	return ownAddrVal
 }
 
 func (m *marzbanSource) readHosts(db *sql.DB) (map[string]marzbanHost, error) {

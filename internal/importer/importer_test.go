@@ -612,6 +612,15 @@ func TestDetectionNamesTheLayout(t *testing.T) {
 
 /* ── helpers ─────────────────────────────────────────────────────────── */
 
+// stub fixes what this machine's own address looks like, so the tests do
+// not depend on where they run.
+func stub(t *testing.T, ip string) {
+	t.Helper()
+	prev := ownAddressFn
+	ownAddressFn = func() string { return ip }
+	t.Cleanup(func() { ownAddressFn = prev })
+}
+
 func hasWarning(s *Snapshot, substr string) bool {
 	for _, w := range s.Warnings {
 		if strings.Contains(w, substr) {
@@ -680,6 +689,9 @@ func TestMarzbanPlaceholderAddressIsNotTakenLiterally(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// When this machine's own address cannot be determined, the template
+	// must not be imported as if it were an address.
+	stub(t, "")
 	snap := readSnapshot(t, path, Options{})
 	if len(snap.Inbounds) != 0 {
 		t.Errorf("imported an inbound whose address is a template: %q",
@@ -695,7 +707,21 @@ func TestMarzbanPlaceholderAddressIsNotTakenLiterally(t *testing.T) {
 		t.Errorf("having several addresses must be reported, got %v", snap.Warnings)
 	}
 
-	// with an address supplied, the same panel imports cleanly
+	// With the address known, {SERVER_IP} means what marzban means by it.
+	stub(t, "203.0.113.7")
+	snap = readSnapshot(t, path, Options{})
+	if len(snap.Inbounds) != 1 {
+		t.Fatalf("got %d inbounds once the server address was known", len(snap.Inbounds))
+	}
+	if got := snap.Inbounds[0].Inbound.Host; got != "203.0.113.7" {
+		t.Errorf("host = %q, want the server's own address", got)
+	}
+	if !hasWarning(snap, "filled in this server") {
+		t.Errorf("substituting an address must be reported, got %v", snap.Warnings)
+	}
+	stub(t, "")
+
+	// an explicit address always wins
 	snap = readSnapshot(t, path, Options{Host: "vpn.example.com"})
 	if len(snap.Inbounds) != 1 {
 		t.Fatalf("got %d inbounds with -host given", len(snap.Inbounds))
