@@ -290,6 +290,15 @@
     border-color:var(--accent);transform:translateY(-1px);
   }
   .modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:18px;flex-wrap:wrap}
+  .seg{display:flex;gap:4px;padding:4px;border-radius:12px;background:var(--soft);
+    border:1px solid var(--line);margin-bottom:12px}
+  .seg-btn{flex:1;font:inherit;font-size:12.5px;font-weight:600;padding:9px 10px;
+    border-radius:9px;border:0;cursor:pointer;background:transparent;color:var(--muted);
+    transition:background-color .14s ease, color .14s ease}
+  .seg-btn:hover{color:var(--text)}
+  .seg-btn.on{background:var(--accent);color:var(--on-accent)}
+  .seg-btn:disabled{opacity:.45;cursor:not-allowed}
+  .seg-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .qrwrap{text-align:center;padding:8px}
   .qrwrap svg{width:236px;height:236px;background:#fff;padding:10px;border-radius:14px}
   .err-line{background:rgba(192,57,43,.18);border:1px solid rgba(192,57,43,.5);
@@ -597,7 +606,14 @@
 <div class="backdrop" id="m-qr">
   <div class="modal">
     <h3 id="qr-title"></h3>
-    <p class="hint" data-i18n="qr_hint">Scan in v2rayNG, Streisand, Hiddify or sing-box.</p>
+    <p class="hint" data-i18n="qr_hint">Scan in Scorpion VPN, v2rayNG, Streisand, Hiddify or sing-box.</p>
+    <div class="seg" id="qr-seg">
+      <button type="button" class="seg-btn on" data-k="sub" onclick="qrTab('sub')"
+        data-i18n="qr_sub">Subscription</button>
+      <button type="button" class="seg-btn" data-k="cfg" onclick="qrTab('cfg')"
+        data-i18n="qr_cfg">This config</button>
+    </div>
+    <p class="hint" id="qr-why" style="margin:-4px 0 12px"></p>
     <div class="qrwrap" id="qr-svg"></div>
     <div class="linkbox mono" id="qr-link" style="margin-top:14px"></div>
     <div class="modal-actions">
@@ -629,7 +645,7 @@ const I18N = {
       new_inbound:"New inbound",new_user:"New user",edit_user:"Edit user",
       inb_hint:"Pick a template; Reality keys are generated for you.",
       usr_hint:"A subscription token is issued automatically.",
-      qr_hint:"Scan in v2rayNG, Streisand, Hiddify or sing-box.",
+      qr_hint:"Scan in Scorpion VPN, v2rayNG, Streisand, Hiddify or sing-box.",
       f_template:"Template",f_remark:"Name",f_port:"Port",f_host:"Public address",
       f_sni:"SNI",f_dest:"Steal from",f_dest_hint:"Leave empty to use the SNI on port 443",
       f_node:"Node",f_private:"Private (admin only)",f_inbound:"Inbound",f_email:"User name",
@@ -666,6 +682,9 @@ const I18N = {
       mg_found_here:"Panels found on this server",
       mg_found_none:"No other panel found on this server. Upload its database instead.",
       mg_or:"or point at it yourself",
+      qr_sub:"Subscription",qr_cfg:"This config",
+      qr_why_sub:"Give this to the customer. It keeps working if a key is rotated or the inbound moves.",
+      qr_why_cfg:"One server only. Use it for a quick test, or an app that cannot take a subscription.",
       mg_use:"use this",
       mg_checking:"Checking…",
       mg_lost:"The answer never came back, and nothing was imported. Nothing is half-done — press the button again.",
@@ -687,7 +706,7 @@ const I18N = {
       new_inbound:"ورودی تازه",new_user:"کاربر تازه",edit_user:"ویرایش کاربر",
       inb_hint:"یک قالب انتخاب کنید؛ کلیدهای ریلیتی خودکار ساخته می‌شوند.",
       usr_hint:"نشانه اشتراک به‌صورت خودکار صادر می‌شود.",
-      qr_hint:"با نرم‌افزارهای وی‌تورِی‌ان‌جی، استرایسند، هیدیفای یا سینگ‌باکس بخوانید.",
+      qr_hint:"با اسکورپیون وی‌پی‌ان، وی‌تورِی‌ان‌جی، استرایسند، هیدیفای یا سینگ‌باکس بخوانید.",
       f_template:"قالب",f_remark:"نام",f_port:"پورت",f_host:"نشانی عمومی",
       f_sni:"نام دامنه",f_dest:"قرض گرفتن از",f_dest_hint:"خالی بگذارید تا همان دامنه روی پورت ۴۴۳ به کار برود",
       f_node:"گره",f_private:"خصوصی، فقط مدیر",f_inbound:"ورودی",f_email:"نام کاربر",
@@ -724,6 +743,9 @@ const I18N = {
       mg_found_here:"پنل‌هایی که روی همین سرور پیدا شد",
       mg_found_none:"پنل دیگری روی این سرور پیدا نشد. فایلش را بفرستید.",
       mg_or:"یا خودتان نشانی بدهید",
+      qr_sub:"اشتراک",qr_cfg:"همین کانفیگ",
+      qr_why_sub:"این را به مشتری بدهید. اگر کلید عوض شود یا ورودی جابه‌جا شود باز هم کار می‌کند.",
+      qr_why_cfg:"فقط همین یک سرور. برای آزمایش سریع یا برنامه‌ای که اشتراک نمی‌پذیرد.",
       mg_use:"همین را بیاور",
       mg_checking:"در حال بررسی…",
       mg_lost:"جواب برنگشت و چیزی هم وارد نشد. چیزی نیمه‌کاره نمانده — دوباره دکمه را بزنید.",
@@ -1034,14 +1056,31 @@ async function submitEdit(ev){
   return false;
 }
 
+/* The dialog carries two things. The subscription link is what a
+   customer should be given: it keeps working when a key is rotated or an
+   inbound moves. The config link is the single server, for a one-off or
+   for an app that cannot take a subscription. */
+let QRDATA = null;
 async function showQR(id){
   try{
     const j = await api('/api/users/'+id+'/qr');
+    QRDATA = j;
     document.getElementById('qr-title').textContent = j.email;
-    document.getElementById('qr-svg').innerHTML = j.svg;
-    document.getElementById('qr-link').textContent = j.link;
+    const subBtn = document.querySelector('.seg-btn[data-k="sub"]');
+    subBtn.disabled = !j.sub_url;
+    qrTab(j.sub_url ? 'sub' : 'cfg');
     openM('m-qr');
   }catch(e){ toast(e.message, true); }
+}
+function qrTab(kind){
+  if(!QRDATA) return;
+  if(kind === 'sub' && !QRDATA.sub_url) kind = 'cfg';
+  document.querySelectorAll('#qr-seg .seg-btn').forEach(b =>
+    b.classList.toggle('on', b.dataset.k === kind));
+  const isSub = kind === 'sub';
+  document.getElementById('qr-svg').innerHTML = isSub ? QRDATA.sub_svg : QRDATA.svg;
+  document.getElementById('qr-link').textContent = isSub ? QRDATA.sub_url : QRDATA.link;
+  document.getElementById('qr-why').textContent = T(isSub ? 'qr_why_sub' : 'qr_why_cfg');
 }
 function copyQR(){
   navigator.clipboard.writeText(document.getElementById('qr-link').textContent)

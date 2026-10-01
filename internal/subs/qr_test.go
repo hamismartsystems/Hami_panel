@@ -33,11 +33,12 @@ func matrixEquals(m [][]bool, g qrGolden) bool {
 }
 
 // The goldens are decoder-verified: each was round-tripped through
-// OpenCV's QRCodeDetector at four render sizes before being frozen here,
+// zxing-cpp — the decoder behind most phone scanner apps — at four
+// render sizes before being frozen here,
 // so a change that still produces a "valid-looking" matrix but breaks
 // real scanners will fail this test.
 func TestQRMatrixGoldens(t *testing.T) {
-	for _, g := range []qrGolden{golden_v1, golden_v2, golden_v3, golden_v4, golden_v6, golden_v9} {
+	for _, g := range []qrGolden{golden_v1, golden_v2, golden_v3, golden_v4, golden_v6, golden_v9, golden_v10} {
 		m, err := QRMatrix(g.text)
 		if err != nil {
 			t.Fatalf("%q: %v", g.text, err)
@@ -64,18 +65,19 @@ func TestQRMatrixGoldens(t *testing.T) {
 }
 
 func TestQRTooLong(t *testing.T) {
-	// 230 bytes is the v9 limit; one more must be refused rather than
-	// silently truncated.
-	if _, err := QRMatrix(strings.Repeat("x", 231)); err == nil {
+	// 520 bytes is the v15 limit — the count field is two bytes from
+	// version 10 on. One more must be refused, not silently truncated.
+	if _, err := QRMatrix(strings.Repeat("x", 521)); err == nil {
 		t.Fatal("expected error for oversized payload")
 	}
-	if _, err := QRMatrix(strings.Repeat("x", 230)); err != nil {
-		t.Fatalf("230-byte payload must fit v9: %v", err)
+	if _, err := QRMatrix(strings.Repeat("x", 520)); err != nil {
+		t.Fatalf("520-byte payload must fit v15: %v", err)
 	}
 	// every version boundary must pick a matrix that is big enough
 	for _, tc := range []struct{ n, size int }{
 		{17, 21}, {32, 25}, {53, 29}, {78, 33},
 		{106, 37}, {134, 41}, {154, 45}, {192, 49}, {230, 53},
+		{271, 57}, {321, 61}, {367, 65}, {425, 69}, {458, 73}, {520, 77},
 	} {
 		m, err := QRMatrix(strings.Repeat("x", tc.n))
 		if err != nil {
@@ -164,7 +166,7 @@ func TestChosenMaskIsRecordedInFormatInfo(t *testing.T) {
 		return mask, ok
 	}
 	seen := map[int]bool{}
-	for _, g := range []qrGolden{golden_v1, golden_v2, golden_v3, golden_v4, golden_v6, golden_v9} {
+	for _, g := range []qrGolden{golden_v1, golden_v2, golden_v3, golden_v4, golden_v6, golden_v9, golden_v10} {
 		m, err := QRMatrix(g.text)
 		if err != nil {
 			t.Fatalf("%q: %v", g.text, err)
@@ -206,6 +208,62 @@ func TestFormatInfoCopiesAgree(t *testing.T) {
 		b := m[second[i][1]][second[i][0]]
 		if a != b {
 			t.Errorf("format bit %d differs between the two copies", i)
+		}
+	}
+}
+
+// The computed alignment coordinates and version words must match the
+// tables printed in the standard. Computing them keeps the source short,
+// but only if the computation is pinned to the published values.
+func TestAlignmentCentresMatchTheStandard(t *testing.T) {
+	want := map[int][]int{
+		1: nil, 2: {6, 18}, 3: {6, 22}, 4: {6, 26}, 5: {6, 30}, 6: {6, 34},
+		7: {6, 22, 38}, 8: {6, 24, 42}, 9: {6, 26, 46}, 10: {6, 28, 50},
+		11: {6, 30, 54}, 12: {6, 32, 58}, 13: {6, 34, 62},
+		14: {6, 26, 46, 66}, 15: {6, 26, 48, 70},
+	}
+	for v, w := range want {
+		got := alignCenters(v)
+		if len(got) != len(w) {
+			t.Errorf("v%d: got %v, want %v", v, got, w)
+			continue
+		}
+		for i := range w {
+			if got[i] != w[i] {
+				t.Errorf("v%d: got %v, want %v", v, got, w)
+				break
+			}
+		}
+	}
+}
+
+func TestVersionWordsMatchTheStandard(t *testing.T) {
+	want := map[int]int{
+		7: 0x07C94, 8: 0x085BC, 9: 0x09A99, 10: 0x0A4D3, 11: 0x0BBF6,
+		12: 0x0C762, 13: 0x0D847, 14: 0x0E60D, 15: 0x0F928,
+	}
+	for v, w := range want {
+		if got := versionBitsFor(v); got != w {
+			t.Errorf("v%d: got %#05x, want %#05x", v, got, w)
+		}
+	}
+}
+
+// Every row of the EC table must add up the way the standard says.
+func TestECTableIsSelfConsistent(t *testing.T) {
+	totals := map[int]int{ // total codewords per version
+		1: 26, 2: 44, 3: 70, 4: 100, 5: 134, 6: 172, 7: 196, 8: 242,
+		9: 292, 10: 346, 11: 404, 12: 466, 13: 532, 14: 581, 15: 655,
+	}
+	for _, sp := range qrSpecs {
+		if sp.g2Blocks > 0 && sp.g2Data != sp.g1Data+1 {
+			t.Errorf("v%d: second group holds %d, want %d", sp.version, sp.g2Data, sp.g1Data+1)
+		}
+		if got, want := sp.dataCW()+sp.ecCW(), totals[sp.version]; got != want {
+			t.Errorf("v%d: %d codewords, the standard says %d", sp.version, got, want)
+		}
+		if sp.size() != sp.version*4+17 {
+			t.Errorf("v%d: size %d", sp.version, sp.size())
 		}
 	}
 }

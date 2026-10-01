@@ -18,32 +18,89 @@ Minimal QR encoder — enough for the customer status page:
     that real scanners refuse on longer payloads
 */
 
-// qrSpec is one line of the QR standard's EC table for level L.
+// qrSpec is one line of the QR standard's error-correction table for
+// level L. From version 10 the blocks are no longer all the same size:
+// the codewords are split into two groups, the second holding one more
+// data codeword per block than the first.
 type qrSpec struct {
-	version, size int
-	dataCW, ecCW  int // totals across all blocks
-	blocks        int // RS blocks at level L; all equal size up to v9
-	align         []int
+	version    int
+	ecPerBlock int
+	g1Blocks   int // blocks in the first group
+	g1Data     int // data codewords in each of them
+	g2Blocks   int // blocks in the second group, often zero
+	g2Data     int // always g1Data + 1 when present
 }
 
+func (q qrSpec) size() int   { return q.version*4 + 17 }
+func (q qrSpec) blocks() int { return q.g1Blocks + q.g2Blocks }
+func (q qrSpec) dataCW() int { return q.g1Blocks*q.g1Data + q.g2Blocks*q.g2Data }
+func (q qrSpec) ecCW() int   { return q.blocks() * q.ecPerBlock }
+
+// countBits is the width of the character count field in byte mode. It
+// widens at version 10, which costs a whole extra byte of payload.
+func (q qrSpec) countBits() int {
+	if q.version >= 10 {
+		return 16
+	}
+	return 8
+}
+
+// maxBytes is how much payload actually fits: the data capacity less the
+// mode nibble and the character count.
+func (q qrSpec) maxBytes() int {
+	return (q.dataCW()*8 - 4 - q.countBits()) / 8
+}
+
+// Versions 1 to 15 at level L. Fifteen holds 521 bytes of payload, which
+// is far more than any share link, and stopping there keeps the table
+// short enough to check by eye against the standard.
 var qrSpecs = []qrSpec{
-	{version: 1, size: 21, dataCW: 19, ecCW: 7, blocks: 1, align: nil},
-	{version: 2, size: 25, dataCW: 34, ecCW: 10, blocks: 1, align: []int{6, 18}},
-	{version: 3, size: 29, dataCW: 55, ecCW: 15, blocks: 1, align: []int{6, 22}},
-	{version: 4, size: 33, dataCW: 80, ecCW: 20, blocks: 1, align: []int{6, 26}},
-	{version: 5, size: 37, dataCW: 108, ecCW: 26, blocks: 1, align: []int{6, 30}},
-	{version: 6, size: 41, dataCW: 136, ecCW: 36, blocks: 2, align: []int{6, 34}},
-	{version: 7, size: 45, dataCW: 156, ecCW: 40, blocks: 2, align: []int{6, 22, 38}},
-	{version: 8, size: 49, dataCW: 194, ecCW: 48, blocks: 2, align: []int{6, 24, 42}},
-	{version: 9, size: 53, dataCW: 232, ecCW: 60, blocks: 2, align: []int{6, 26, 46}},
+	{version: 1, ecPerBlock: 7, g1Blocks: 1, g1Data: 19},
+	{version: 2, ecPerBlock: 10, g1Blocks: 1, g1Data: 34},
+	{version: 3, ecPerBlock: 15, g1Blocks: 1, g1Data: 55},
+	{version: 4, ecPerBlock: 20, g1Blocks: 1, g1Data: 80},
+	{version: 5, ecPerBlock: 26, g1Blocks: 1, g1Data: 108},
+	{version: 6, ecPerBlock: 18, g1Blocks: 2, g1Data: 68},
+	{version: 7, ecPerBlock: 20, g1Blocks: 2, g1Data: 78},
+	{version: 8, ecPerBlock: 24, g1Blocks: 2, g1Data: 97},
+	{version: 9, ecPerBlock: 30, g1Blocks: 2, g1Data: 116},
+	{version: 10, ecPerBlock: 18, g1Blocks: 2, g1Data: 68, g2Blocks: 2, g2Data: 69},
+	{version: 11, ecPerBlock: 20, g1Blocks: 4, g1Data: 81},
+	{version: 12, ecPerBlock: 24, g1Blocks: 2, g1Data: 92, g2Blocks: 2, g2Data: 93},
+	{version: 13, ecPerBlock: 26, g1Blocks: 4, g1Data: 107},
+	{version: 14, ecPerBlock: 30, g1Blocks: 3, g1Data: 115, g2Blocks: 1, g2Data: 116},
+	{version: 15, ecPerBlock: 22, g1Blocks: 5, g1Data: 87, g2Blocks: 1, g2Data: 88},
 }
 
-// versionBits holds the 18-bit BCH(18,6) version information words. Only
-// versions 7 and above carry them.
-var versionBits = map[int]int{
-	7: 0x07C94,
-	8: 0x085BC,
-	9: 0x09A99,
+// alignCenters returns the alignment pattern coordinates for a version.
+// Computing them beats tabulating forty rows by hand; the result is
+// checked against the standard's table in the tests.
+func alignCenters(version int) []int {
+	if version == 1 {
+		return nil
+	}
+	size := version*4 + 17
+	count := version/7 + 2
+	step := 26
+	if version != 32 {
+		step = ((version*4 + count*2 + 1) / (count*2 - 2)) * 2
+	}
+	out := make([]int, count)
+	out[0] = 6
+	for i, pos := count-1, size-7; i >= 1; i, pos = i-1, pos-step {
+		out[i] = pos
+	}
+	return out
+}
+
+// versionBitsFor computes the 18-bit version information word: six bits
+// of version and a BCH(18,6) remainder.
+func versionBitsFor(version int) int {
+	rem := version
+	for i := 0; i < 12; i++ {
+		rem = (rem << 1) ^ ((rem >> 11) * 0x1F25)
+	}
+	return version<<12 | rem
 }
 
 // formatBits returns the 15-bit format information for error-correction
@@ -71,29 +128,13 @@ var maskFns = [8]func(x, y int) bool{
 	func(x, y int) bool { return ((x+y)%2+x*y%3)%2 == 0 },
 }
 
-// QRMatrix renders text into a QR module matrix (true = dark module).
-// The matrix is size×size; it never errors for text up to 230 bytes.
-func QRMatrix(text string) ([][]bool, error) {
-	data := []byte(text)
-	var spec *qrSpec
-	for i := range qrSpecs {
-		s := &qrSpecs[i]
-		max := s.dataCW - 2 // mode nibble + length byte
-		if len(data) <= max {
-			spec = s
-			break
-		}
-	}
-	if spec == nil {
-		return nil, fmt.Errorf("qr: text too long (%d bytes, max %d)",
-			len(data), qrSpecs[len(qrSpecs)-1].dataCW-2)
-	}
-
+// qrSkeleton lays out everything that does not depend on the mask: the
+// function patterns and the unmasked data.
+func qrSkeleton(spec *qrSpec, data []byte) (modules, function [][]bool, size int) {
 	codewords := qrInterleave(spec, qrData(spec, data))
-
-	size := spec.size
-	modules := make([][]bool, size)
-	function := make([][]bool, size)
+	size = spec.size()
+	modules = make([][]bool, size)
+	function = make([][]bool, size)
 	for i := range modules {
 		modules[i] = make([]bool, size)
 		function[i] = make([]bool, size)
@@ -135,9 +176,9 @@ func QRMatrix(text string) ([][]bool, error) {
 	// 7 on some centers legitimately fall on a timing pattern (e.g. 22,6),
 	// so the finder corners must be excluded explicitly rather than by
 	// testing whether the module is already a function module.
-	last := spec.size - 7
-	for _, ay := range spec.align {
-		for _, ax := range spec.align {
+	last := spec.size() - 7
+	for _, ay := range alignCenters(spec.version) {
+		for _, ax := range alignCenters(spec.version) {
 			onFinder := (ax == 6 && ay == 6) ||
 				(ax == 6 && ay == last) ||
 				(ax == last && ay == 6)
@@ -154,7 +195,8 @@ func QRMatrix(text string) ([][]bool, error) {
 
 	// version information (versions 7+): two 6×3 copies, next to the
 	// top-right and bottom-left finders
-	if vb, ok := versionBits[spec.version]; ok {
+	if spec.version >= 7 {
+		vb := versionBitsFor(spec.version)
 		for i := 0; i < 18; i++ {
 			dark := (vb>>uint(i))&1 == 1
 			a := size - 11 + i%3
@@ -209,23 +251,31 @@ func QRMatrix(text string) ([][]bool, error) {
 			}
 		}
 	}
+	return modules, function, size
+}
+
+func QRMatrix(text string) ([][]bool, error) {
+	data := []byte(text)
+	var spec *qrSpec
+	for i := range qrSpecs {
+		s := &qrSpecs[i]
+		if len(data) <= s.maxBytes() {
+			spec = s
+			break
+		}
+	}
+	if spec == nil {
+		return nil, fmt.Errorf("qr: text too long (%d bytes, max %d)",
+			len(data), qrSpecs[len(qrSpecs)-1].maxBytes())
+	}
+	modules, function, size := qrSkeleton(spec, data)
 
 	// Pick the mask that scores best. The data is still unmasked, so each
 	// candidate is the same grid with one mask and its format info applied.
 	var best [][]bool
 	bestScore := -1
 	for mask := 0; mask < 8; mask++ {
-		cand := make([][]bool, size)
-		for y := range cand {
-			cand[y] = make([]bool, size)
-			copy(cand[y], modules[y])
-			for x := range cand[y] {
-				if !function[y][x] && maskFns[mask](x, y) {
-					cand[y][x] = !cand[y][x]
-				}
-			}
-		}
-		setFormat(cand, function, size, mask)
+		cand := applyMask(modules, function, size, mask)
 		if sc := qrPenalty(cand); bestScore < 0 || sc < bestScore {
 			best, bestScore = cand, sc
 		}
@@ -239,26 +289,43 @@ func QRMatrix(text string) ([][]bool, error) {
 // EC codeword i of every block in turn. A single-block version is just the
 // data followed by its EC codewords.
 func qrInterleave(spec *qrSpec, data []byte) []byte {
-	nb := spec.blocks
-	if nb <= 1 {
-		return append(data, rsEncode(data, spec.ecCW)...)
+	nb := spec.blocks()
+	if nb == 1 {
+		return append(data, rsEncode(data, spec.ecPerBlock)...)
 	}
-	perData, perEC := spec.dataCW/nb, spec.ecCW/nb
-	dataBlocks := make([][]byte, nb)
-	ecBlocks := make([][]byte, nb)
-	for i := range dataBlocks {
-		dataBlocks[i] = data[i*perData : (i+1)*perData]
-		ecBlocks[i] = rsEncode(dataBlocks[i], perEC)
-	}
-	out := make([]byte, 0, spec.dataCW+spec.ecCW)
-	for i := 0; i < perData; i++ {
-		for b := 0; b < nb; b++ {
-			out = append(out, dataBlocks[b][i])
+
+	dataBlocks := make([][]byte, 0, nb)
+	ecBlocks := make([][]byte, 0, nb)
+	off := 0
+	add := func(count, length int) {
+		for i := 0; i < count; i++ {
+			blk := data[off : off+length]
+			off += length
+			dataBlocks = append(dataBlocks, blk)
+			ecBlocks = append(ecBlocks, rsEncode(blk, spec.ecPerBlock))
 		}
 	}
-	for i := 0; i < perEC; i++ {
-		for b := 0; b < nb; b++ {
-			out = append(out, ecBlocks[b][i])
+	add(spec.g1Blocks, spec.g1Data)
+	add(spec.g2Blocks, spec.g2Data)
+
+	out := make([]byte, 0, spec.dataCW()+spec.ecCW())
+	// Data codeword i of every block in turn. The shorter blocks of the
+	// first group simply have nothing to contribute on the last pass.
+	longest := spec.g1Data
+	if spec.g2Data > longest {
+		longest = spec.g2Data
+	}
+	for i := 0; i < longest; i++ {
+		for _, blk := range dataBlocks {
+			if i < len(blk) {
+				out = append(out, blk[i])
+			}
+		}
+	}
+	// Every block has the same number of EC codewords.
+	for i := 0; i < spec.ecPerBlock; i++ {
+		for _, blk := range ecBlocks {
+			out = append(out, blk[i])
 		}
 	}
 	return out
@@ -272,13 +339,15 @@ func qrData(spec *qrSpec, data []byte) []byte {
 			bits = append(bits, (v>>i)&1 == 1)
 		}
 	}
-	push(0b0100, 4)          // byte mode
-	push(len(data), 8)       // length (versions ≤ 9: 8 bits)
+	push(0b0100, 4) // byte mode
+	// The character count field widens at version 10. Getting this wrong
+	// produces a symbol that encodes cleanly and decodes as nonsense.
+	push(len(data), spec.countBits())
 	for _, b := range data { // payload
 		push(int(b), 8)
 	}
 	// terminator: up to 4 zero bits, not exceeding capacity
-	term := spec.dataCW*8 - len(bits)
+	term := spec.dataCW()*8 - len(bits)
 	if term > 4 {
 		term = 4
 	}
@@ -287,7 +356,7 @@ func qrData(spec *qrSpec, data []byte) []byte {
 	if r := len(bits) % 8; r != 0 {
 		push(0, 8-r)
 	}
-	out := make([]byte, 0, spec.dataCW)
+	out := make([]byte, 0, spec.dataCW())
 	for i := 0; i < len(bits); i += 8 {
 		var b byte
 		for j := 0; j < 8; j++ {
@@ -300,7 +369,7 @@ func qrData(spec *qrSpec, data []byte) []byte {
 	}
 	// alternating pad bytes
 	padStart := len(out)
-	for i := padStart; i < spec.dataCW; i++ {
+	for i := padStart; i < spec.dataCW(); i++ {
 		if (i-padStart)%2 == 0 {
 			out = append(out, 0xEC)
 		} else {
@@ -308,6 +377,23 @@ func qrData(spec *qrSpec, data []byte) []byte {
 		}
 	}
 	return out
+}
+
+// applyMask returns a copy of the unmasked grid with one mask and its
+// format information applied.
+func applyMask(modules, function [][]bool, size, mask int) [][]bool {
+	cand := make([][]bool, size)
+	for y := range cand {
+		cand[y] = make([]bool, size)
+		copy(cand[y], modules[y])
+		for x := range cand[y] {
+			if !function[y][x] && maskFns[mask](x, y) {
+				cand[y][x] = !cand[y][x]
+			}
+		}
+	}
+	setFormat(cand, function, size, mask)
+	return cand
 }
 
 // qrPenalty scores a finished matrix with the four standard rules and

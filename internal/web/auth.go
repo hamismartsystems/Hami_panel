@@ -27,6 +27,9 @@ type Server struct {
 	// DBPath is where Store keeps its file. The importer copies it aside
 	// before writing, so an import can always be undone.
 	DBPath string
+	// BaseURL is the address customers use to fetch subscriptions. Empty
+	// means "work it out from the request".
+	BaseURL string
 
 	limiter loginLimiter
 	imports importSessions

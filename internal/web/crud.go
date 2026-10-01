@@ -353,7 +353,38 @@ func (s *Server) apiUserQR(w http.ResponseWriter, r *http.Request, a *store.Admi
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+
+	out := map[string]any{
 		"email": c.Email, "link": raw, "svg": svg, "sub_token": c.SubToken,
-	})
+	}
+
+	// The subscription link is the one to hand a customer: it survives a
+	// rotated key or a moved inbound, where a pasted config does not. It
+	// is only useful if the client actually has a token.
+	if c.SubToken != "" {
+		subURL := s.subURL(r) + "/sub/" + c.SubToken
+		out["sub_url"] = subURL
+		if qr, err := subs.QRSVG(subURL); err == nil {
+			out["sub_svg"] = qr
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// subURL is where customers reach this panel. The operator can pin it
+// with -base-url; otherwise the address the admin is browsing is the best
+// guess available, and it is right whenever the panel is reached the same
+// way customers reach it.
+func (s *Server) subURL(r *http.Request) string {
+	if s.BaseURL != "" {
+		return strings.TrimRight(s.BaseURL, "/")
+	}
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	if p := r.Header.Get("X-Forwarded-Proto"); p != "" {
+		scheme = p
+	}
+	return scheme + "://" + r.Host
 }

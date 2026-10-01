@@ -71,7 +71,7 @@ func webServe(args []string) int {
 	}
 
 	subSrv := &subs.Server{Store: st, BaseURL: *baseURL}
-	srv := &web.Server{Store: st, DBPath: *dbPath, Secure: tls}
+	srv := &web.Server{Store: st, DBPath: *dbPath, Secure: tls, BaseURL: *baseURL}
 	webHandler := srv.Routes()
 
 	mux := http.NewServeMux()
