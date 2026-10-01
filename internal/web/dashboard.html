@@ -603,7 +603,10 @@ const I18N = {
       mg_found_here:"Panels found on this server",
       mg_found_none:"No other panel found on this server. Upload its database instead.",
       mg_or:"or point at it yourself",
-      mg_use:"use this"},
+      mg_use:"use this",
+      mg_checking:"Checking…",
+      mg_lost:"The answer never came back, and nothing was imported. Nothing is half-done — press the button again.",
+      mg_recovered:"The connection dropped before the answer arrived, but the import had already finished on the server. These users are in your panel. Open the Users tab to see them."},
   fa:{tagline:"کنترل اچ‌پی‌یوآی",refresh:"تازه‌سازی",signout:"خروج",
       t_overview:"نمای کلی",t_inbounds:"ورودی‌ها",t_users:"کاربران",t_nodes:"گره‌ها",t_logs:"رویدادها",
       k_users:"کاربران",k_inbounds:"ورودی‌ها",k_nodes:"گره‌ها",k_traffic:"ترافیک",
@@ -658,7 +661,10 @@ const I18N = {
       mg_found_here:"پنل‌هایی که روی همین سرور پیدا شد",
       mg_found_none:"پنل دیگری روی این سرور پیدا نشد. فایلش را بفرستید.",
       mg_or:"یا خودتان نشانی بدهید",
-      mg_use:"همین را بیاور"}
+      mg_use:"همین را بیاور",
+      mg_checking:"در حال بررسی…",
+      mg_lost:"جواب برنگشت و چیزی هم وارد نشد. چیزی نیمه‌کاره نمانده — دوباره دکمه را بزنید.",
+      mg_recovered:"ارتباط پیش از رسیدن جواب قطع شد، ولی واردات روی سرور کامل انجام شده بود. این کاربرها در پنل شما هستند؛ از زبانهٔ کاربران ببینیدشان."}
 };
 let lang = localStorage.getItem('hpui-lang') || 'en';
 const T = k => (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k;
@@ -1038,17 +1044,20 @@ function mgNote(kind, title, items){
   return `<div class="mg-note ${kind}"><b>${esc(title)}</b><ul>` +
     items.map(x => `<li>${esc(x)}</li>`).join('') + `</ul></div>`;
 }
-async function mgPreview(ev){
-  ev.preventDefault();
-  mgError('');
-  const form = document.getElementById('mgForm');
-  const fd = new FormData(form);
-  if(!document.getElementById('mgFile').files.length && !fd.get('path')){
-    mgError(T('mg_nofile')); return false;
-  }
+function mgFormData(){
+  const fd = new FormData(document.getElementById('mgForm'));
   if(!document.getElementById('mgXray').files.length) fd.delete('xray');
   if(!document.getElementById('mgFile').files.length) fd.delete('db');
   fd.set('keep_subs', document.getElementById('mgKeep').checked ? '1' : '0');
+  return fd;
+}
+async function mgPreview(ev){
+  ev.preventDefault();
+  mgError('');
+  const fd = mgFormData();
+  if(!document.getElementById('mgFile').files.length && !fd.get('path')){
+    mgError(T('mg_nofile')); return false;
+  }
 
   const btn = document.getElementById('mgPreviewBtn');
   btn.disabled = true; btn.textContent = T('mg_looking');
@@ -1118,9 +1127,38 @@ async function mgApply(){
     toast(T('mg_done'));
     loadAll();
   }catch(e){
-    mgError(e.message);
+    // A connection that drops on the way back looks exactly like an
+    // import that failed, and on a mobile network it is the likelier of
+    // the two. The import is idempotent, so instead of guessing, ask the
+    // server what it holds now.
+    go.textContent = T('mg_checking');
+    const landed = await mgDidItLand();
+    if(landed && landed.new_clients === 0 &&
+       (landed.existing_inbounds > 0 || landed.existing_clients > 0)){
+      MGDONE = {created_inbounds: landed.existing_inbounds,
+                created_clients: landed.existing_clients,
+                verified: false, recovered: true};
+      MG = null;
+      mgStep(3);
+      mgRenderDone();
+      mgError('');
+      toast(T('mg_done'));
+      loadAll();
+      return;
+    }
+    mgError(T('mg_lost') + ' — ' + e.message);
     go.disabled = false; go.textContent = T('mg_import');
   }
+}
+
+// mgDidItLand re-reads the source and returns the plan, so the caller can
+// see whether there is still anything left to import.
+async function mgDidItLand(){
+  try{
+    const j = await api('/api/import/preview', {method:'POST', body:mgFormData()});
+    if(j.session) MG = {session:j.session, expect:j.plan.new_clients, data:j};
+    return j.plan;
+  }catch(err){ return null; }
 }
 function mgRenderDone(){
   const j = MGDONE;
@@ -1128,6 +1166,7 @@ function mgRenderDone(){
   let html = `<div class="mg-note good"><b>${T('mg_done')}</b><ul>` +
     `<li>${j.created_inbounds} ${T('count_inb')} · ${j.created_clients} ${T('count_usr')}</li></ul></div>`;
   if(j.verified) html += `<div class="mg-note good">${T('mg_verified')}</div>`;
+  if(j.recovered) html += `<div class="mg-note warn">${T('mg_recovered')}</div>`;
   if(j.backup) html += `<div class="mg-note skip"><b>${T('mg_backup')}</b><ul><li>${esc(j.backup)}</li></ul></div>`;
   document.getElementById('mgNotes').innerHTML = html;
   document.getElementById('mgActions').innerHTML =
