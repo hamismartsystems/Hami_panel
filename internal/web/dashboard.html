@@ -874,8 +874,11 @@ let themeIdx = 1;
 function applyTheme(id){
   const i = THEMES.findIndex(t => t.id === id); if(i >= 0) themeIdx = i;
   document.body.setAttribute('data-theme', THEMES[themeIdx].id);
-  const nxt = THEMES[(themeIdx+1) % THEMES.length];
-  document.getElementById('themeBtn').textContent = `${nxt.icon} ${nxt.label[lang]||nxt.label.en}`;
+  // The button is read as a label of where you are, not a promise of
+  // where you will go — and the login page already worked that way, so
+  // showing the next theme here made the two screens disagree.
+  const cur = THEMES[themeIdx];
+  document.getElementById('themeBtn').textContent = `${cur.icon} ${cur.label[lang]||cur.label.en}`;
   try{localStorage.setItem('hpui-theme', THEMES[themeIdx].id)}catch(e){}
 }
 document.getElementById('themeBtn').onclick = () =>
