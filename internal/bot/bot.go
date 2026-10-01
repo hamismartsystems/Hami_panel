@@ -524,22 +524,29 @@ func (b *Bot) deliver(ctx context.Context, u *store.BotUser, o *store.Order) {
 	p, _ := PlanByKey(o.Plan)
 	email := fmt.Sprintf("tg%d-%d", o.TelegramID, o.ID)
 
+	// Which inbound the account goes on. The operator can pin one; with
+	// nothing pinned the panel picks the least loaded public inbound,
+	// the same choice the command line makes for -node auto.
+	inboundID := b.cfg.InboundID
+	if inboundID == 0 {
+		in, err := b.cfg.Store.LeastLoadedInbound()
+		if err != nil || in == nil {
+			b.deliveryFailed(ctx, u, o, fmt.Errorf(
+				"no inbound is available to put the account on: %v", err))
+			return
+		}
+		inboundID = in.ID
+	}
+
 	c, err := provision.User(b.cfg.Store, provision.UserOptions{
-		InboundID: b.cfg.InboundID,
+		InboundID: inboundID,
 		Email:     email,
 		QuotaGB:   float64(o.GB),
 		Days:      p.Days,
 		IPLimit:   1,
 	})
 	if err != nil {
-		_ = b.cfg.Store.AddEvent("error", "bot",
-			"could not create the account for order "+fmt.Sprint(o.ID), err.Error())
-		_ = b.api.send(ctx, u.TelegramID,
-			"پرداخت شما ثبت شد ولی ساخت کانفیگ به مشکل خورد. پشتیبانی پیگیری می‌کند.", "")
-		if b.cfg.AdminID != 0 {
-			_ = b.api.send(ctx, b.cfg.AdminID,
-				fmt.Sprintf("ساخت اکانت سفارش %d ناموفق بود:\n%v", o.ID, err), "")
-		}
+		b.deliveryFailed(ctx, u, o, err)
 		return
 	}
 	_ = b.cfg.Store.AttachOrderClient(o.ID, c.ID, c.Email)
@@ -597,6 +604,23 @@ func (b *Bot) deliver(ctx context.Context, u *store.BotUser, o *store.Order) {
 	}
 	_ = b.cfg.Store.AddEvent("info", "bot", fmt.Sprintf(
 		"delivered order %d: %s, %dGB, %s toman", o.ID, p.Name, o.GB, Toman(o.Price)), email)
+}
+
+// deliveryFailed tells both sides the truth and leaves the order in a
+// state the operator can retry: the money is recorded as paid, the
+// account is not marked delivered, so approving again tries once more.
+func (b *Bot) deliveryFailed(ctx context.Context, u *store.BotUser, o *store.Order, err error) {
+	_ = b.cfg.Store.AddEvent("error", "bot",
+		"could not create the account for order "+fmt.Sprint(o.ID), err.Error())
+	_ = b.api.send(ctx, u.TelegramID,
+		"پرداخت شما ثبت شد ولی ساخت کانفیگ به مشکل خورد. "+
+			"پشتیبانی پیگیری می‌کند و کانفیگ را برایتان می‌فرستد.", "")
+	if b.cfg.AdminID != 0 {
+		_ = b.api.send(ctx, b.cfg.AdminID, fmt.Sprintf(
+			"ساخت اکانت سفارش %d ناموفق بود:\n%v\n\n"+
+				"پس از رفع مشکل، دوباره روی تأیید همان رسید بزنید.", o.ID, err),
+			keyboard([]button{{Text: "تلاش دوباره", Data: fmt.Sprintf("approve:order:%d:0", o.ID)}}))
+	}
 }
 
 /* ── small helpers ────────────────────────────────────────────────── */

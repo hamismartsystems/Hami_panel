@@ -199,3 +199,32 @@ func TestOrderHistoryIsNewestFirst(t *testing.T) {
 		t.Errorf("history = %+v", list)
 	}
 }
+
+// The first real sale failed because the bot never chose an inbound and
+// the provisioner refuses to guess. Nothing here may depend on an
+// operator remembering to pin one.
+func TestAnInboundIsChosenWhenNoneIsPinned(t *testing.T) {
+	st := openStore(t)
+	in := &store.Inbound{
+		Remark: "Reality-443", Protocol: "vless", Port: 443, Host: "198.51.100.10",
+		Transport: "tcp", Security: "none", Enable: true,
+	}
+	if err := st.CreateInbound(in); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.LeastLoadedInbound()
+	if err != nil || got == nil {
+		t.Fatalf("with one enabled inbound the panel must pick it: %v", err)
+	}
+	if got.ID != in.ID {
+		t.Errorf("picked inbound %d, want %d", got.ID, in.ID)
+	}
+}
+
+func TestNoInboundAtAllIsAnError(t *testing.T) {
+	st := openStore(t)
+	in, err := st.LeastLoadedInbound()
+	if err == nil && in != nil {
+		t.Error("an empty panel offered an inbound out of nowhere")
+	}
+}
