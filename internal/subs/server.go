@@ -77,6 +77,11 @@ func (s *Server) handleSub(w http.ResponseWriter, r *http.Request) {
 	if c.ExpireAt != nil {
 		w.Header().Set("Profile-Expire", c.ExpireAt.UTC().Format(http.TimeFormat))
 	}
+	// Apps name a subscription from this header. Without it the entry in
+	// the customer's app is nameless, which is what the operator sees as
+	// "it does not show the name" even though every config inside is
+	// labelled correctly.
+	w.Header().Set("Profile-Title", profileTitle(c.Email))
 	w.Header().Set("Profile-Update-Interval", "12")
 	w.Header().Set("Profile-Web-Page-Url", s.SubURL(token)+"/status")
 	// clients that get zero links must not cache an empty list for hours
@@ -164,4 +169,19 @@ table{margin:14px auto;font-size:14px}td{padding:5px 10px;text-align:right}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(page))
+}
+
+// profileTitle encodes the subscription's name the way clients expect.
+// Plain ASCII goes as-is; anything else is base64, because a raw
+// non-ASCII header value is not legal and apps drop it silently.
+func profileTitle(name string) string {
+	if name == "" {
+		return "HAMI"
+	}
+	for _, r := range name {
+		if r < 0x20 || r > 0x7e {
+			return "base64:" + base64.StdEncoding.EncodeToString([]byte(name))
+		}
+	}
+	return name
 }
