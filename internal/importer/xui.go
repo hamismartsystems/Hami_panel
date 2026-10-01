@@ -146,15 +146,24 @@ func (x *xuiSource) Read(db *sql.DB, opt Options) (*Snapshot, error) {
 			return nil, err
 		}
 
-		// A per-client flow is really an inbound property in HAMI, so take
-		// the one the clients agree on and note it when they do not.
+		// Flow is kept per client, exactly as the source had it, so a
+		// customer running vision among sixteen who do not keeps working.
+		// -flow overrides every one of them, for an operator who wants
+		// the inbound uniform.
 		if opt.Flow != "" {
-			in.Flow = strings.TrimSpace(opt.Flow)
-			if in.Flow == "none" {
-				in.Flow = ""
+			forced := strings.TrimSpace(opt.Flow)
+			if forced == "none" {
+				forced = ""
+			}
+			in.Flow = forced
+			for i := range clients {
+				clients[i].Flow = forced
 			}
 		} else {
 			in.Flow = commonFlow(flows, snap, ref)
+			for i := range clients {
+				clients[i].Flow = flows[i]
+			}
 		}
 
 		snap.Inbounds = append(snap.Inbounds, Imported{
@@ -431,8 +440,8 @@ func commonFlow(flows []string, snap *Snapshot, ref string) string {
 		}
 	}
 	snap.Warnings = append(snap.Warnings, fmt.Sprintf(
-		"%s: clients disagree on flow (%s); HAMI stores one per inbound, kept %q — "+
-			"pass -flow to choose, or -flow none for no flow at all",
+		"%s: clients use different flows (%s); each keeps its own, "+
+			"and the inbound defaults to %q — pass -flow to make them uniform",
 		ref, strings.Join(parts, ", "), fallback(best, "(none)")))
 	return best
 }

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"sync"
@@ -73,21 +74,66 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage:\n  hami gen -spec inbounds.json -out config.json [-core xray|singbox]\n  hami canary -spec inbounds.json [-xray /path/to/xray]\n  hami guard -spec inbounds.json [-dial 127.0.0.1] [-db panel.db] [-repair -xray /path/to/xray -config config.json]\n  hami pin [-dir /var/lib/hami]\n  hami upgrade -dir /var/lib/hami -bin ./xray -version 26.3.27\n  hami backup -db panel.db -out backup.tar.gz [-xray-dir /var/lib/hami]\n  hami restore -in backup.tar.gz -db panel.db [-xray-dir /var/lib/hami]\n  hami audit -db panel.db [-tail 50] [-level warn]\n  hami user ... (hami user with no args prints user usage)\n  hami sub serve -db panel.db [-addr :8080] [-base-url URL]\n  hami notice -db panel.db [-days 3] [-ratio 0.8] [-telegram TOKEN:CHATID]\n  hami node add|list|check|remove -db panel.db\n  hami agent run -listen ADDR -name NAME -api-key KEY\n  hami template list\n  hami template apply -db panel.db -template NAME -remark REMARK -host HOST -port PORT -sni SNI -dest DEST ...\n  hami reality check -dest HOST:PORT -sni SNI\n  hami reality keygen\n  hami reality rotate -db panel.db -id ID [-new-sid] [-new-key]\n  hami admin create|list|passwd|delete -db panel.db -user NAME\n  hami import scan|plan|apply -db panel.db -src /etc/x-ui/x-ui.db [-keep-subs] [-yes]\n  hami web serve -db panel.db [-addr :8080] [-base-url URL]\n")
+	fmt.Fprintf(os.Stderr, "usage:\n  hami gen -spec inbounds.json -out config.json [-core xray|singbox]\n  hami gen -db panel.db -out config.json   (build from the panel's own data)\n  hami canary -spec inbounds.json [-xray /path/to/xray]\n  hami canary -from-db panel.db -xray /path/to/xray   (real traffic, panel's own data)\n  hami guard -spec inbounds.json [-dial 127.0.0.1] [-db panel.db] [-repair -xray /path/to/xray -config config.json]\n  hami pin [-dir /var/lib/hami]\n  hami upgrade -dir /var/lib/hami -bin ./xray -version 26.3.27\n  hami backup -db panel.db -out backup.tar.gz [-xray-dir /var/lib/hami]\n  hami restore -in backup.tar.gz -db panel.db [-xray-dir /var/lib/hami]\n  hami audit -db panel.db [-tail 50] [-level warn]\n  hami user ... (hami user with no args prints user usage)\n  hami sub serve -db panel.db [-addr :8080] [-base-url URL]\n  hami notice -db panel.db [-days 3] [-ratio 0.8] [-telegram TOKEN:CHATID]\n  hami node add|list|check|remove -db panel.db\n  hami agent run -listen ADDR -name NAME -api-key KEY\n  hami template list\n  hami template apply -db panel.db -template NAME -remark REMARK -host HOST -port PORT -sni SNI -dest DEST ...\n  hami reality check -dest HOST:PORT -sni SNI\n  hami reality keygen\n  hami reality rotate -db panel.db -id ID [-new-sid] [-new-key]\n  hami admin create|list|passwd|delete -db panel.db -user NAME\n  hami import scan|plan|apply -db panel.db -src /etc/x-ui/x-ui.db [-keep-subs] [-yes]\n  hami web serve -db panel.db [-addr :8080] [-base-url URL]\n")
 }
 
 func gen(args []string) int {
 	fs := flag.NewFlagSet("gen", flag.ContinueOnError)
 	specPath := fs.String("spec", "", "inbound spec JSON")
+	dbPath := fs.String("db", "", "build from the panel database instead of a spec")
 	outPath := fs.String("out", "", "config to write")
 	core := fs.String("core", "xray", "core type: xray or singbox")
 	fs.SetOutput(os.Stderr)
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	if *specPath == "" || *outPath == "" {
+	if *outPath == "" || (*specPath == "" && *dbPath == "") {
 		usage()
 		return 2
+	}
+	if *specPath != "" && *dbPath != "" {
+		fmt.Fprintln(os.Stderr, "gen: choose either -spec or -db, not both")
+		return 2
+	}
+
+	// Building straight from the panel database is what lets the panel
+	// run Xray itself: the config and the links customers hold come from
+	// the same rows, so they cannot drift apart.
+	if *dbPath != "" {
+		if *core != "xray" {
+			fmt.Fprintln(os.Stderr, "gen: -db currently builds xray configs only")
+			return 2
+		}
+		st, err := store.Open(*dbPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "open db: %v\n", err)
+			return 1
+		}
+		defer st.Close()
+		endpoints, err := xray.EndpointsFromStore(st)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "reading inbounds: %v\n", err)
+			return 1
+		}
+		if len(endpoints) == 0 {
+			fmt.Fprintln(os.Stderr, "gen: no enabled inbound in the database")
+			return 1
+		}
+		cfg, err := xray.Build(endpoints)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "build: %v\n", err)
+			return 1
+		}
+		if err := os.WriteFile(*outPath, cfg, 0o600); err != nil {
+			fmt.Fprintf(os.Stderr, "write: %v\n", err)
+			return 1
+		}
+		clients := 0
+		for _, e := range endpoints {
+			clients += len(e.Clients)
+		}
+		fmt.Printf("wrote %s — %d inbound(s), %d client(s)\n", *outPath, len(endpoints), clients)
+		return 0
 	}
 	raw, err := os.ReadFile(*specPath)
 	if err != nil {
@@ -159,35 +205,74 @@ func gen(args []string) int {
 func canary(args []string) int {
 	fs := flag.NewFlagSet("canary", flag.ContinueOnError)
 	specPath := fs.String("spec", "", "inbound spec JSON")
+	fromDB := fs.String("from-db", "", "test what the panel database would actually serve")
 	xrayBin := fs.String("xray", os.Getenv("XRAY_BIN"), "path to the xray binary")
 	dbPath := fs.String("db", "", "optional database for the audit log")
 	fs.SetOutput(os.Stderr)
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	if *specPath == "" || *xrayBin == "" {
+	if *xrayBin == "" || (*specPath == "" && *fromDB == "") {
 		usage()
 		return 2
 	}
-	raw, err := os.ReadFile(*specPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "read spec: %v\n", err)
-		return 1
-	}
-	var spec xray.Spec
-	if err := json.Unmarshal(raw, &spec); err != nil {
-		fmt.Fprintf(os.Stderr, "spec: %v\n", err)
-		return 1
-	}
-	endpoints, err := spec.Endpoints()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "spec: %v\n", err)
-		return 1
+
+	var endpoints []xray.Endpoint
+	if *fromDB != "" {
+		// Testing the spec proves the spec works. Before handing a live
+		// server over to the panel, what matters is whether the rows in
+		// the panel's own database carry real traffic.
+		st, err := store.Open(*fromDB)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "open db: %v\n", err)
+			return 1
+		}
+		defer st.Close()
+		endpoints, err = xray.EndpointsFromStore(st)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "reading inbounds: %v\n", err)
+			return 1
+		}
+		if *dbPath == "" {
+			*dbPath = *fromDB
+		}
+	} else {
+		raw, err := os.ReadFile(*specPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "read spec: %v\n", err)
+			return 1
+		}
+		var spec xray.Spec
+		if err := json.Unmarshal(raw, &spec); err != nil {
+			fmt.Fprintf(os.Stderr, "spec: %v\n", err)
+			return 1
+		}
+		endpoints, err = spec.Endpoints()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "spec: %v\n", err)
+			return 1
+		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	failed := false
 	for _, ep := range endpoints {
+		if *fromDB != "" {
+			// The database holds the real listen address and the real
+			// port. Starting a test core on those takes live traffic away
+			// from the core already serving it, so an isolated run gets a
+			// loopback address and a free port instead. The link the
+			// canary builds follows the same two values, so the test is
+			// still end to end.
+			port, err := localFreePort()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "canary: %v\n", err)
+				return 1
+			}
+			ep.Listen = "127.0.0.1"
+			ep.Inbound.Host = "127.0.0.1"
+			ep.Inbound.Port = port
+		}
 		if ep.Listen == "" {
 			ep.Listen = "127.0.0.1"
 		}
@@ -205,6 +290,17 @@ func canary(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+// localFreePort asks the kernel for a port nobody is using, so an
+// isolated canary cannot collide with a running service.
+func localFreePort() (int, error) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, err
+	}
+	defer ln.Close()
+	return ln.Addr().(*net.TCPAddr).Port, nil
 }
 
 func guardCmd(args []string) int {

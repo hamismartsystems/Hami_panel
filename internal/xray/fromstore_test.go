@@ -1,11 +1,22 @@
 package xray
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/hamismartsystems/hami_panel/internal/store"
 )
+
+func openMemStore(t *testing.T) *store.Store {
+	t.Helper()
+	st, err := store.Open(t.TempDir() + "/panel.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	return st
+}
 
 func TestStoreConfigOmitsDisabledInboundSecrets(t *testing.T) {
 	st, err := store.Open(t.TempDir() + "/panel.db")
@@ -75,5 +86,69 @@ func TestStoreConfigOmitsDisabledInboundSecrets(t *testing.T) {
 	}
 	if !strings.Contains(links[0], "PUB_LIVE") || strings.Contains(links[0], "PUB_DEAD") {
 		t.Fatalf("link: %s", links[0])
+	}
+}
+
+// A real inbound can carry one customer on vision and the rest on none.
+// The generated config has to say so per client, or the odd one out
+// simply stops connecting the moment the panel takes over.
+func TestConfigKeepsEachClientsOwnFlow(t *testing.T) {
+	st := openMemStore(t)
+	in := &store.Inbound{
+		Remark: "Reality-443", Protocol: "vless", Port: 443, Host: "198.51.100.10",
+		Transport: "tcp", Security: "reality", SNI: "www.example.com",
+		PublicKey: "PUB", ShortID: "aabb", Fingerprint: "chrome",
+		Enable: true, Flow: "",
+	}
+	if err := st.CreateInbound(in); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetInboundSecret(store.InboundSecret{
+		InboundID: in.ID, PrivateKey: "PRIV", Dest: "www.example.com:443", Listen: "0.0.0.0",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ email, uuid, flow string }{
+		{"vision-user", "11111111-1111-1111-1111-111111111111", "xtls-rprx-vision"},
+		{"plain-user", "22222222-2222-2222-2222-222222222222", ""},
+	} {
+		cl := &store.Client{
+			InboundID: in.ID, UUID: c.uuid, Email: c.email, Flow: c.flow,
+		}
+		if err := st.CreateClient(cl); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	eps, err := EndpointsFromStore(st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := Build(eps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg struct {
+		Inbounds []struct {
+			Settings struct {
+				Clients []struct {
+					Email string `json:"email"`
+					Flow  string `json:"flow"`
+				} `json:"clients"`
+			} `json:"settings"`
+		} `json:"inbounds"`
+	}
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, c := range cfg.Inbounds[0].Settings.Clients {
+		got[c.Email] = c.Flow
+	}
+	if got["vision-user"] != "xtls-rprx-vision" {
+		t.Errorf("vision-user flow in the config: %q", got["vision-user"])
+	}
+	if got["plain-user"] != "" {
+		t.Errorf("plain-user must have no flow, got %q", got["plain-user"])
 	}
 }

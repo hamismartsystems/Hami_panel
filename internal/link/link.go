@@ -80,6 +80,18 @@ type Client struct {
 	Email      string
 	Method     string // shadowsocks
 	SSPassword string
+	// Flow overrides the inbound's flow for this client. Real panels let
+	// one customer run xtls-rprx-vision while the rest run none, and a
+	// link that disagrees with the server simply fails to connect.
+	Flow string
+}
+
+// FlowFor reports the flow this client actually uses on this inbound.
+func FlowFor(in Inbound, c Client) string {
+	if c.Flow != "" {
+		return c.Flow
+	}
+	return in.Flow
 }
 
 // Validate makes sure the link builder is not fed a half-configured inbound.
@@ -188,8 +200,8 @@ func vless(in Inbound, c Client) (string, error) {
 	}
 
 	// flow only makes sense with a TLS/Reality layer on tcp-like transports
-	if in.Flow != "" && in.Security != None {
-		q.Set("flow", in.Flow)
+	if f := FlowFor(in, c); f != "" && in.Security != None {
+		q.Set("flow", f)
 	}
 
 	u := url.URL{

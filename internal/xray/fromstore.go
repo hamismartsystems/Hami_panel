@@ -31,7 +31,7 @@ func EndpointsFromStore(st *store.Store) ([]Endpoint, error) {
 			}
 			enabled = append(enabled, link.Client{
 				UUID: c.UUID, Password: c.Password, Email: c.Email,
-				Method: c.Method, SSPassword: c.SSPassword,
+				Method: c.Method, SSPassword: c.SSPassword, Flow: c.Flow,
 			})
 		}
 		sec, err := st.GetInboundSecret(in.ID)

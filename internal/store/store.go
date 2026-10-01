@@ -146,6 +146,11 @@ var migrations = []string{
 		expires_at TEXT NOT NULL
 	);`,
 	`CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);`,
+	// Per-client flow. Storing one flow per inbound cannot represent a
+	// real 3x-ui inbound where one customer runs xtls-rprx-vision and the
+	// rest run none, and importing one used to silently change somebody's
+	// connection. Appended last: the list is index-based.
+	`ALTER TABLE clients ADD COLUMN flow TEXT NOT NULL DEFAULT '';`,
 }
 
 func (s *Store) migrate() error {
@@ -221,6 +226,9 @@ type Client struct {
 	IPLimit    int
 	SpeedLimit int64
 	SubToken   string
+	// Flow overrides the inbound's flow for this one client. Empty means
+	// "whatever the inbound says".
+	Flow string
 
 	CreatedAt time.Time
 }
@@ -358,11 +366,11 @@ func (s *Store) CreateClient(c *Client) error {
 	}
 	res, err := s.db.Exec(`INSERT INTO clients (inbound_id, uuid, password, method,
 		ss_password, email, enable, total_bytes, up_bytes, down_bytes, expire_at,
-		ip_limit, speed_limit, sub_token, created_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		ip_limit, speed_limit, sub_token, created_at, flow)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		c.InboundID, c.UUID, c.Password, c.Method, c.SSPassword, c.Email,
 		boolInt(c.Enable), c.TotalBytes, c.UpBytes, c.DownBytes, expire,
-		c.IPLimit, c.SpeedLimit, c.SubToken, c.CreatedAt.Format(time.RFC3339))
+		c.IPLimit, c.SpeedLimit, c.SubToken, c.CreatedAt.Format(time.RFC3339), c.Flow)
 	if err != nil {
 		return err
 	}
@@ -373,13 +381,13 @@ func (s *Store) CreateClient(c *Client) error {
 func (s *Store) GetClient(id int64) (*Client, error) {
 	return scanClient(s.db.QueryRow(`SELECT id, inbound_id, uuid, password, method,
 		ss_password, email, enable, total_bytes, up_bytes, down_bytes, expire_at,
-		ip_limit, speed_limit, sub_token, created_at FROM clients WHERE id = ?`, id))
+		ip_limit, speed_limit, sub_token, created_at, flow FROM clients WHERE id = ?`, id))
 }
 
 func (s *Store) ListClientsOf(inboundID int64) ([]Client, error) {
 	rows, err := s.db.Query(`SELECT id, inbound_id, uuid, password, method,
 		ss_password, email, enable, total_bytes, up_bytes, down_bytes, expire_at,
-		ip_limit, speed_limit, sub_token, created_at FROM clients WHERE inbound_id = ? ORDER BY id`,
+		ip_limit, speed_limit, sub_token, created_at, flow FROM clients WHERE inbound_id = ? ORDER BY id`,
 		inboundID)
 	if err != nil {
 		return nil, err
@@ -433,7 +441,7 @@ func scanClient(row scanner) (*Client, error) {
 	)
 	err := row.Scan(&c.ID, &c.InboundID, &c.UUID, &c.Password, &c.Method,
 		&c.SSPassword, &c.Email, &enable, &c.TotalBytes, &c.UpBytes, &c.DownBytes,
-		&expire, &c.IPLimit, &c.SpeedLimit, &c.SubToken, &ts)
+		&expire, &c.IPLimit, &c.SpeedLimit, &c.SubToken, &ts, &c.Flow)
 	if err != nil {
 		return nil, err
 	}

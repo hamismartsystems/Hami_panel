@@ -60,7 +60,7 @@ func userUsage() {
   hami user create -db panel.db -inbound N -email NAME [-uuid U] [-quota GB] [-expire-days D] [-expire-at RFC3339] [-ip-limit N] [-speed KBPS]
   hami user list -db panel.db
   hami user show -db panel.db -email NAME
-  hami user set -db panel.db -email NAME [-quota GB] [-expire-days D] [-expire-at RFC3339] [-ip-limit N] [-speed KBPS]
+  hami user set -db panel.db -email NAME [-quota GB] [-expire-days D] [-expire-at RFC3339] [-ip-limit N] [-speed KBPS] [-flow FLOW|none]
   hami user enable|disable -db panel.db -email NAME
   hami user reset -db panel.db -email NAME
   hami user rotate-token -db panel.db -email NAME
@@ -293,7 +293,7 @@ func expireStr(c *store.Client) string {
 }
 
 func userSet(args []string) int {
-	var dbPath, email, expireAt string
+	var dbPath, email, expireAt, flow string
 	var quotaGB float64
 	var expireDays, ipLimit, speedKbps int
 	fs, ok := parseFlagSet("user set", args, func(fs *flag.FlagSet) {
@@ -304,6 +304,7 @@ func userSet(args []string) int {
 		fs.StringVar(&expireAt, "expire-at", "", "")
 		fs.IntVar(&ipLimit, "ip-limit", -1, "")
 		fs.IntVar(&speedKbps, "speed", -1, "kbps")
+		fs.StringVar(&flow, "flow", "", `xtls-rprx-vision, or "none" to clear it`)
 	})
 	_ = fs
 	if !ok {
@@ -338,6 +339,15 @@ func userSet(args []string) int {
 	}
 	if speedKbps >= 0 {
 		c.SpeedLimit = int64(speedKbps)
+	}
+	// Changing flow changes what the client must send, so the share link
+	// has to be reissued to whoever holds it.
+	if flow != "" {
+		if flow == "none" {
+			c.Flow = ""
+		} else {
+			c.Flow = flow
+		}
 	}
 	if err := st.UpdateClient(c); err != nil {
 		fmt.Fprintf(os.Stderr, "update: %v\n", err)

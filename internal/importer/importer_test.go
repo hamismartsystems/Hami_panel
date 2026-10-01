@@ -228,9 +228,15 @@ func TestReadsNormalised3xUI(t *testing.T) {
 	if byEmail["off"].Enable {
 		t.Error("a disabled client came in enabled")
 	}
-	// the source mixes flows, which must be surfaced
-	if !hasWarning(snap, "disagree on flow") {
-		t.Errorf("expected a warning about mixed flows, got %v", snap.Warnings)
+	// the source mixes flows; each client must keep its own
+	if !hasWarning(snap, "different flows") {
+		t.Errorf("expected a note about mixed flows, got %v", snap.Warnings)
+	}
+	if got := byEmail["ali"].Flow; got != "xtls-rprx-vision" {
+		t.Errorf("ali ran vision in the source, imported as %q", got)
+	}
+	if got := byEmail["reza"].Flow; got != "" {
+		t.Errorf("reza ran no flow in the source, imported as %q", got)
 	}
 	// two short ids, only one kept
 	if !hasWarning(snap, "short ids") {
@@ -260,14 +266,50 @@ func TestReadsSettingsJSONLayout(t *testing.T) {
 	}
 }
 
-func TestForcedFlowOverridesTheClients(t *testing.T) {
+func TestForcedFlowOverridesEveryClient(t *testing.T) {
 	snap := readSnapshot(t, xuiNormalised(t), Options{Flow: "xtls-rprx-vision"})
 	if got := snap.Inbounds[0].Inbound.Flow; got != "xtls-rprx-vision" {
-		t.Errorf("flow = %q", got)
+		t.Errorf("inbound flow = %q", got)
+	}
+	for _, c := range snap.Inbounds[0].Clients {
+		if c.Flow != "xtls-rprx-vision" {
+			t.Errorf("%s kept %q despite -flow", c.Email, c.Flow)
+		}
 	}
 	snap = readSnapshot(t, xuiSettings(t), Options{Flow: "none"})
 	if got := snap.Inbounds[0].Inbound.Flow; got != "" {
-		t.Errorf(`-flow none should clear the flow, got %q`, got)
+		t.Errorf(`-flow none should clear the inbound flow, got %q`, got)
+	}
+	for _, c := range snap.Inbounds[0].Clients {
+		if c.Flow != "" {
+			t.Errorf("%s kept %q despite -flow none", c.Email, c.Flow)
+		}
+	}
+}
+
+// Importing a mixed inbound must not change anybody's connection: the
+// client that ran vision keeps it, the ones that did not stay plain.
+func TestMixedFlowSurvivesTheRoundTrip(t *testing.T) {
+	st, dbPath := openTestStore(t)
+	snap := readSnapshot(t, xuiNormalised(t), Options{})
+	plan, err := BuildPlan(st, snap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Apply(st, dbPath, plan); err != nil {
+		t.Fatal(err)
+	}
+	inbounds, _ := st.ListInbounds()
+	clients, _ := st.ListClientsOf(inbounds[0].ID)
+	got := map[string]string{}
+	for _, c := range clients {
+		got[c.Email] = c.Flow
+	}
+	if got["ali"] != "xtls-rprx-vision" {
+		t.Errorf("ali's flow after the write: %q", got["ali"])
+	}
+	if got["reza"] != "" {
+		t.Errorf("reza's flow after the write: %q", got["reza"])
 	}
 }
 

@@ -264,8 +264,8 @@ func protocolSettings(ep Endpoint) (map[string]any, error) {
 				return nil, fmt.Errorf("inbound %d: vless client without uuid", ep.Inbound.ID)
 			}
 			item := map[string]any{"id": c.UUID, "email": c.Email}
-			if ep.Inbound.Flow != "" && ep.Inbound.Security != link.None {
-				item["flow"] = ep.Inbound.Flow
+			if f := link.FlowFor(ep.Inbound, c); f != "" && ep.Inbound.Security != link.None {
+				item["flow"] = f
 			}
 			clients = append(clients, item)
 		}
