@@ -2,6 +2,7 @@ package bot
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/hamismartsystems/hami_panel/internal/store"
@@ -226,5 +227,38 @@ func TestNoInboundAtAllIsAnError(t *testing.T) {
 	in, err := st.LeastLoadedInbound()
 	if err == nil && in != nil {
 		t.Error("an empty panel offered an inbound out of nowhere")
+	}
+}
+
+// Both links have to be under the QR, and the whole thing has to fit in
+// a Telegram caption or the delivery silently splits in two.
+func TestDeliveryTextCarriesBothLinksAndFitsACaption(t *testing.T) {
+	p, _ := PlanByKey("monthly")
+	sub := "https://sub.example.com/sub/mlptlds1lej8ep0p"
+	cfg := "vless://11111111-2222-3333-4444-555555555555@198.51.100.10:443?" +
+		"flow=xtls-rprx-vision&fp=chrome&pbk=AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHHIIIIJJJJKKK" +
+		"&security=reality&sid=1122334455667788&sni=www.example.com&spx=%2F&type=tcp" +
+		"#Reality-443-tg223351591-1"
+	msg := DeliveryText(p, 10, sub, cfg, "https://t.me/support")
+
+	for _, want := range []string{sub, cfg, "10 گیگابایت", "30 روز", "https://t.me/support"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("the delivery text is missing %q", want)
+		}
+	}
+	if n := len([]rune(msg)); n > telegramCaptionLimit {
+		t.Errorf("a normal delivery is %d characters, over the %d caption limit, "+
+			"so it would arrive as two messages", n, telegramCaptionLimit)
+	}
+}
+
+func TestDeliveryTextForTheUntimedPlan(t *testing.T) {
+	p, _ := PlanByKey("forever")
+	msg := DeliveryText(p, 50, "https://sub.example.com/sub/x", "vless://y", "")
+	if !strings.Contains(msg, "بدون انقضای زمانی") {
+		t.Errorf("the untimed plan should not promise an expiry date: %q", msg)
+	}
+	if strings.Contains(msg, "پشتیبانی") {
+		t.Error("a support line appeared with no support url configured")
 	}
 }

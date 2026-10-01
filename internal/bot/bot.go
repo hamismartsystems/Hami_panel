@@ -571,35 +571,37 @@ func (b *Bot) deliver(ctx context.Context, u *store.BotUser, o *store.Order) {
 		subURL = strings.TrimRight(b.cfg.BaseURL, "/") + "/sub/" + c.SubToken
 	}
 
-	expiry := "بدون انقضای زمانی"
-	if p.Days > 0 {
-		expiry = fmt.Sprintf("%d روز از همین حالا", p.Days)
-	}
-	msg := fmt.Sprintf("سفارش شما آماده شد\n\nپلن: %s\nحجم: %d گیگابایت\nانقضا: %s\n",
-		p.Name, o.GB, expiry)
-	if subURL != "" {
-		msg += "\nلینک اشتراک (این را در برنامه اضافه کنید):\n" + subURL + "\n"
-	}
-	if link != "" {
-		msg += "\nلینک مستقیم کانفیگ:\n" + link + "\n"
-	}
-	if b.cfg.SupportURL != "" {
-		msg += "\nپشتیبانی: " + b.cfg.SupportURL
-	}
-	_ = b.api.send(ctx, u.TelegramID, msg, keyboard(
+	msg := DeliveryText(p, o.GB, subURL, link, b.cfg.SupportURL)
+	menu := keyboard(
 		[]button{{Text: "سفارش‌های من", Data: "orders"}},
-		[]button{{Text: "بازگشت", Data: "home"}}))
+		[]button{{Text: "بازگشت", Data: "home"}})
 
-	// The QR goes as an image, generated here: no third party ever sees
-	// the key.
+	// Everything arrives as one message: the QR with the links written
+	// underneath it, so the customer scans or copies from the same place
+	// instead of hunting back through the chat. The QR is rendered here,
+	// so no third party ever sees the key.
 	target := subURL
 	if target == "" {
 		target = link
 	}
-	if target != "" {
+	delivered := false
+	if target != "" && len([]rune(msg)) <= telegramCaptionLimit {
 		if img, err := qrPNG(target); err == nil {
-			_ = b.api.sendPhoto(ctx, u.TelegramID, "config.png", img,
-				"این کد را در برنامه اسکن کنید", "")
+			if err := b.api.sendPhoto(ctx, u.TelegramID, "config.png", img, msg, menu); err == nil {
+				delivered = true
+			}
+		}
+	}
+	if !delivered {
+		// Either the image could not be made or the caption would be
+		// longer than Telegram accepts under a photo. The customer still
+		// gets everything, just in two messages.
+		_ = b.api.send(ctx, u.TelegramID, msg, menu)
+		if target != "" {
+			if img, err := qrPNG(target); err == nil {
+				_ = b.api.sendPhoto(ctx, u.TelegramID, "config.png", img,
+					"این کد را در برنامه اسکن کنید", "")
+			}
 		}
 	}
 	_ = b.cfg.Store.AddEvent("info", "bot", fmt.Sprintf(
@@ -622,6 +624,33 @@ func (b *Bot) deliveryFailed(ctx context.Context, u *store.BotUser, o *store.Ord
 			keyboard([]button{{Text: "تلاش دوباره", Data: fmt.Sprintf("approve:order:%d:0", o.ID)}}))
 	}
 }
+
+// DeliveryText is what the customer reads under the QR code. Both links
+// belong here: the subscription is the one to add to an app, the direct
+// config is for a quick test or an app that cannot take a subscription.
+func DeliveryText(p Plan, gb int, subURL, configLink, support string) string {
+	expiry := "بدون انقضای زمانی"
+	if p.Days > 0 {
+		expiry = fmt.Sprintf("%d روز از همین حالا", p.Days)
+	}
+	msg := fmt.Sprintf("سفارش شما آماده شد\n\nپلن: %s\nحجم: %d گیگابایت\nانقضا: %s\n",
+		p.Name, gb, expiry)
+	if subURL != "" {
+		msg += "\nلینک اشتراک (این را در برنامه اضافه کنید):\n" + subURL + "\n"
+	}
+	if configLink != "" {
+		msg += "\nلینک مستقیم کانفیگ:\n" + configLink + "\n"
+	}
+	if support != "" {
+		msg += "\nپشتیبانی: " + support
+	}
+	return msg
+}
+
+// telegramCaptionLimit is what Telegram accepts under a photo. A longer
+// caption is rejected outright, so delivery falls back to two messages
+// rather than failing after the customer has paid.
+const telegramCaptionLimit = 1024
 
 /* ── small helpers ────────────────────────────────────────────────── */
 
