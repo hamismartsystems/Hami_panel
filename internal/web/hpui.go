@@ -3,6 +3,7 @@ package web
 import (
 	_ "embed"
 	"net/http"
+	"strings"
 
 	"github.com/hamismartsystems/hami_panel/internal/store"
 )
@@ -12,6 +13,28 @@ var loginHTML string
 
 //go:embed dashboard.html
 var dashboardHTML string
+
+//go:embed uikit.js
+var uikitJS string
+
+// The two pages share their theme and language control. It is injected
+// rather than linked, because the pages ship no external assets: a
+// dashboard that goes blank when a CDN is unreachable is not a
+// dashboard you can run a business on.
+func init() {
+	kernel := "<script>\n" + uikitJS + "</script>"
+	loginHTML = strings.Replace(loginHTML, uikitPlaceholder, kernel, 1)
+	dashboardHTML = strings.Replace(dashboardHTML, uikitPlaceholder, kernel, 1)
+	for name, page := range map[string]string{
+		"login.html": loginHTML, "dashboard.html": dashboardHTML,
+	} {
+		if strings.Contains(page, uikitPlaceholder) || !strings.Contains(page, "HPUI.start") {
+			panic(name + ": the shared theme and language control is not wired in")
+		}
+	}
+}
+
+const uikitPlaceholder = "<!--HPUI-KERNEL-->"
 
 // Handler returns the HP-UI web handler.
 //

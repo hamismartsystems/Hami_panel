@@ -573,3 +573,39 @@ func TestEditRefusesAPortAnotherInboundOwns(t *testing.T) {
 		t.Errorf("the port moved anyway: %d", got.Port)
 	}
 }
+
+// The login page and the dashboard drifted apart three times in one
+// week — the theme button named the wrong theme on one, the logo took
+// the wrong colour on one, the language switch left the theme name
+// stale on one. Each had the same cause: two copies of the same logic.
+// This fails if a copy ever comes back.
+func TestBothScreensShareOneThemeAndLanguageControl(t *testing.T) {
+	pages := map[string]string{"login": loginHTML, "dashboard": dashboardHTML}
+	for name, page := range pages {
+		if !strings.Contains(page, "HPUI.start") {
+			t.Errorf("%s does not use the shared control", name)
+		}
+		if strings.Contains(page, uikitPlaceholder) {
+			t.Errorf("%s still has the placeholder: the control was not injected", name)
+		}
+		// the kernel is injected once, so exactly one definition
+		if n := strings.Count(page, "window.HPUI = (function"); n != 1 {
+			t.Errorf("%s holds %d copies of the control, want 1", name, n)
+		}
+		for _, banned := range []string{
+			"const THEMES =", "const THEMES=",
+			"function applyTheme(t)", "function applyTheme(id){\n  const i",
+		} {
+			if strings.Contains(page, banned) {
+				t.Errorf("%s declares its own theme logic again (%q)", name, banned)
+			}
+		}
+	}
+
+	// and the three themes are named once, in one place
+	for _, want := range []string{`id: 'light'`, `id: 'dark'`, `id: 'vdark'`} {
+		if !strings.Contains(uikitJS, want) {
+			t.Errorf("the shared control is missing %s", want)
+		}
+	}
+}

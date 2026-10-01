@@ -699,6 +699,7 @@
 
 <div class="toast" id="toast"></div>
 
+<!--HPUI-KERNEL-->
 <script>
 /* ── i18n ───────────────────────────────────────────────────────────── */
 const I18N = {
@@ -854,41 +855,15 @@ const I18N = {
 let lang = localStorage.getItem('hpui-lang') || 'en';
 const T = k => (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k;
 
-function applyLang(){
-  document.body.setAttribute('dir', lang === 'fa' ? 'rtl' : 'ltr');
-  document.documentElement.lang = lang;
-  document.getElementById('langBtn').textContent = lang === 'fa' ? 'FA' : 'EN';
+/* Everything on this page that is written in one language or the other.
+   The shared control calls it whenever the language changes. */
+function translatePage(l){
+  lang = l;
   document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = T(el.dataset.i18n));
-  // The theme button's text is written by applyTheme, not by the
-  // translation pass, so switching language has to redraw it or it
-  // keeps the old language until the theme happens to change.
-  applyTheme(THEMES[themeIdx].id);
-  try{localStorage.setItem('hpui-lang', lang)}catch(e){}
   render();
   mgRelang();
 }
-document.getElementById('langBtn').onclick = () => { lang = lang === 'en' ? 'fa' : 'en'; applyLang(); };
 
-/* ── theme (same three as the login page) ───────────────────────────── */
-/* Each entry is named after itself. The button shows the theme you will
-   get by pressing it, so the naming and the arithmetic must not both
-   shift by one — which is exactly what they used to do. */
-const THEMES=[{id:'light',icon:'☀️',label:{en:'Light',fa:'روشن'}},
-              {id:'dark', icon:'🌙',label:{en:'Dark',fa:'تیره'}},
-              {id:'vdark',icon:'🌑',label:{en:'Very dark',fa:'خیلی تیره'}}];
-let themeIdx = 1;
-function applyTheme(id){
-  const i = THEMES.findIndex(t => t.id === id); if(i >= 0) themeIdx = i;
-  document.body.setAttribute('data-theme', THEMES[themeIdx].id);
-  // The button is read as a label of where you are, not a promise of
-  // where you will go — and the login page already worked that way, so
-  // showing the next theme here made the two screens disagree.
-  const cur = THEMES[themeIdx];
-  document.getElementById('themeBtn').textContent = `${cur.icon} ${cur.label[lang]||cur.label.en}`;
-  try{localStorage.setItem('hpui-theme', THEMES[themeIdx].id)}catch(e){}
-}
-document.getElementById('themeBtn').onclick = () =>
-  applyTheme(THEMES[(themeIdx+1) % THEMES.length].id);
 
 /* ── helpers ────────────────────────────────────────────────────────── */
 const esc = s => String(s ?? '').replace(/[&<>"']/g, m =>
@@ -1668,8 +1643,7 @@ async function submitInboundEdit(ev){
 
 /* ── start up last, so every function and every piece of state above
       already exists by the time anything runs ── */
-applyTheme(localStorage.getItem('hpui-theme') || 'dark');
-applyLang();
+HPUI.start({onLang: translatePage});
 loadAll();
 setInterval(loadAll, 30000);
 </script>
