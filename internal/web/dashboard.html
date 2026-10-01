@@ -6,7 +6,7 @@
 <title>HP-UI — HAMI PANEL</title>
 <style>
   :root{
-    --light-bg:#9DC183; --light-card:#FFFFFF; --light-border:#8DB580;
+    --light-bg:#9DC183; --light-card:#B4D49E; --light-border:#7CAC63;
     --light-text:#1B2E1A; --light-muted:#3A5A35;
     --dark-bg:#0B6623; --dark-card:rgba(255,255,255,.07); --dark-border:rgba(255,255,255,.14);
     --dark-text:#EAF6E3; --dark-muted:#A8C9A0;
@@ -52,7 +52,7 @@
   .header{display:flex;align-items:center;justify-content:space-between;gap:16px;
     padding:14px 22px;border-bottom:1px solid var(--dark-border);
     background:rgba(0,0,0,.10);position:sticky;top:0;z-index:20;backdrop-filter:blur(8px)}
-  body[data-theme="light"] .header{background:rgba(255,255,255,.55);border-color:var(--light-border)}
+  body[data-theme="light"] .header{background:rgba(180,212,158,.85);border-color:var(--light-border)}
   body[data-theme="vdark"] .header{border-color:var(--vdark-border)}
   .brand{display:flex;align-items:center;gap:11px}
   .logo-mark{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;
@@ -68,7 +68,7 @@
     display:inline-flex;align-items:center;gap:6px;
     transition:transform .14s ease, box-shadow .14s ease, border-color .14s ease,
                background-color .14s ease}
-  body[data-theme="light"] .icon-btn{background:#fff}
+  body[data-theme="light"] .icon-btn{background:#C3DFB0}
   .icon-btn:hover{transform:translateY(-1px);box-shadow:var(--shadow-sm);
     border-color:var(--accent)}
   .icon-btn:active{transform:translateY(0);box-shadow:none}
@@ -82,7 +82,7 @@
   .tab:hover{opacity:.95;background:var(--soft)}
   .tab.on{opacity:1;background:var(--dark-card);border-color:var(--dark-border);
     border-bottom-color:transparent;font-weight:600}
-  body[data-theme="light"] .tab.on{background:#fff;border-color:var(--light-border)}
+  body[data-theme="light"] .tab.on{background:var(--light-card);border-color:var(--light-border)}
   body[data-theme="vdark"] .tab.on{background:var(--vdark-card);border-color:var(--vdark-border)}
 
   main{padding:18px 22px 60px;max-width:1280px;margin:0 auto}
@@ -103,10 +103,10 @@
   table{width:100%;border-collapse:collapse;font-size:13px}
   th,td{padding:10px 9px;text-align:start;border-bottom:1px solid var(--dark-border);
     white-space:nowrap}
-  body[data-theme="light"] th,body[data-theme="light"] td{border-color:#E3EDDD}
+  body[data-theme="light"] th,body[data-theme="light"] td{border-color:#86B46D}
   th{font-size:11.5px;opacity:.65;font-weight:650;letter-spacing:.3px;text-transform:uppercase}
   tbody tr:hover{background:rgba(255,255,255,.045)}
-  body[data-theme="light"] tbody tr:hover{background:#F4F9F1}
+  body[data-theme="light"] tbody tr:hover{background:#A8CC90}
   .scroll{overflow-x:auto}
 
   /* a single round action button beats six crammed into a row */
@@ -121,7 +121,7 @@
   .menu{position:fixed;z-index:80;min-width:190px;padding:7px;border-radius:14px;
     border:1px solid var(--line);box-shadow:0 24px 60px rgba(0,0,0,.45);
     display:flex;flex-direction:column;gap:2px}
-  body[data-theme="light"]  .menu{background:#FFFFFF;border-color:#CBDCC2}
+  body[data-theme="light"]  .menu{background:#C3DFB0;border-color:#7CAC63}
   body[data-theme="dark"]   .menu{background:#0A5A1E;border-color:rgba(255,255,255,.22)}
   body[data-theme="vdark"]  .menu{background:#06301F;border-color:rgba(255,255,255,.18)}
   .menu-item{display:flex;align-items:center;gap:10px;width:100%;text-align:start;
@@ -138,7 +138,7 @@
   /* ── narrow screens: cards instead of a table nobody can read ── */
   .cards{display:none;gap:12px}
   .ucard{border:1px solid var(--line);background:var(--soft);border-radius:16px;padding:14px}
-  body[data-theme="light"] .ucard{background:#fff}
+  body[data-theme="light"] .ucard{background:#A8CC90;border-color:#7CAC63}
   .ucard-top{display:flex;align-items:center;gap:10px;margin-bottom:4px}
   .ucard-top b{font-size:14.5px;font-weight:700;flex:1;min-width:0;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -196,7 +196,7 @@
   .quota{display:flex;flex-direction:column;gap:6px;min-width:104px}
   .quota-label{font-size:11px;opacity:.65;line-height:1}
   .bar{height:6px;border-radius:4px;background:rgba(0,0,0,.25);overflow:hidden;min-width:92px}
-  body[data-theme="light"] .bar{background:#DCE8D6}
+  body[data-theme="light"] .bar{background:#7CAC63}
   .bar i{display:block;height:100%;background:var(--accent);
     border-radius:4px;transition:width .3s ease}
   .bar i.hot{background:#C8901C}.bar i.max{background:#C0392B}
@@ -253,7 +253,7 @@
     border:1px solid rgba(255,255,255,.18);box-shadow:var(--shadow);font-size:13px;max-width:72vw}
   .linkbox{margin-top:12px;padding:11px 13px;border-radius:10px;word-break:break-all;
     background:rgba(0,0,0,.28);border:1px solid var(--dark-border)}
-  body[data-theme="light"] .linkbox{background:#F2F7EF;border-color:#DDE8D6}
+  body[data-theme="light"] .linkbox{background:#C3DFB0;border-color:#7CAC63}
   .row-actions{display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end}
   .toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;
     margin-bottom:12px;flex-wrap:wrap}
@@ -273,7 +273,7 @@
   .modal{width:min(560px,100%);max-height:88vh;overflow:auto;border-radius:var(--radius);
     padding:24px;background:#123F1C;border:1px solid rgba(255,255,255,.18);
     color:var(--dark-text);box-shadow:var(--shadow)}
-  body[data-theme="light"] .modal{background:#fff;border-color:#DDE8D6;color:var(--light-text)}
+  body[data-theme="light"] .modal{background:#B4D49E;border-color:#7CAC63;color:var(--light-text)}
   body[data-theme="vdark"] .modal{background:#0B2F1E;border-color:rgba(255,255,255,.14)}
   .modal h3{font-size:16px;margin-bottom:4px}
   .modal p.hint{font-size:12px;opacity:.7;margin-bottom:16px}
@@ -310,6 +310,8 @@
   .seg-btn:disabled{opacity:.45;cursor:not-allowed}
   .seg-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .qrwrap{text-align:center;padding:8px}
+  /* The white stays in every theme: a QR needs a light quiet zone or
+     a camera cannot find it. */
   .qrwrap svg{width:236px;height:236px;background:#fff;padding:10px;border-radius:14px}
   .err-line{background:rgba(192,57,43,.18);border:1px solid rgba(192,57,43,.5);
     color:#FFC9C2;padding:9px 12px;border-radius:10px;font-size:12.5px;margin-bottom:12px;
@@ -328,7 +330,7 @@
     border:1px solid var(--line);background:var(--card);cursor:pointer;text-align:start;
     width:100%;font:inherit;color:var(--text);
     transition:transform .16s ease, box-shadow .16s ease, border-color .16s ease}
-  body[data-theme="light"] .mg-card{background:#fff}
+  body[data-theme="light"] .mg-card{background:#A8CC90;border-color:#7CAC63}
   .mg-card:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:var(--shadow-sm)}
   .mg-card:active{transform:translateY(0)}
   .mg-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -862,9 +864,12 @@ function applyLang(){
 document.getElementById('langBtn').onclick = () => { lang = lang === 'en' ? 'fa' : 'en'; applyLang(); };
 
 /* ── theme (same three as the login page) ───────────────────────────── */
-const THEMES=[{id:'light',icon:'🌙',label:{en:'Dark',fa:'تیره'}},
-              {id:'dark',icon:'🌑',label:{en:'Very dark',fa:'خیلی تیره'}},
-              {id:'vdark',icon:'☀️',label:{en:'Light',fa:'روشن'}}];
+/* Each entry is named after itself. The button shows the theme you will
+   get by pressing it, so the naming and the arithmetic must not both
+   shift by one — which is exactly what they used to do. */
+const THEMES=[{id:'light',icon:'☀️',label:{en:'Light',fa:'روشن'}},
+              {id:'dark', icon:'🌙',label:{en:'Dark',fa:'تیره'}},
+              {id:'vdark',icon:'🌑',label:{en:'Very dark',fa:'خیلی تیره'}}];
 let themeIdx = 1;
 function applyTheme(id){
   const i = THEMES.findIndex(t => t.id === id); if(i >= 0) themeIdx = i;
