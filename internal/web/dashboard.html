@@ -109,6 +109,69 @@
   body[data-theme="light"] tbody tr:hover{background:#F4F9F1}
   .scroll{overflow-x:auto}
 
+  /* a single round action button beats six crammed into a row */
+  .kebab{width:34px;height:34px;flex:0 0 34px;border-radius:10px;cursor:pointer;
+    border:1px solid var(--line);background:var(--soft);color:var(--text);
+    font:inherit;font-size:17px;line-height:1;display:inline-grid;place-items:center;
+    transition:border-color .14s ease, transform .14s ease, background-color .14s ease}
+  .kebab:hover{border-color:var(--accent);transform:translateY(-1px)}
+  .kebab:active{transform:translateY(0)}
+  .kebab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  /* the menu floats on the body so a scrolling table cannot clip it */
+  .menu{position:fixed;z-index:80;min-width:190px;padding:7px;border-radius:14px;
+    border:1px solid var(--line);box-shadow:0 24px 60px rgba(0,0,0,.45);
+    display:flex;flex-direction:column;gap:2px}
+  body[data-theme="light"]  .menu{background:#FFFFFF;border-color:#CBDCC2}
+  body[data-theme="dark"]   .menu{background:#0A5A1E;border-color:rgba(255,255,255,.22)}
+  body[data-theme="vdark"]  .menu{background:#06301F;border-color:rgba(255,255,255,.18)}
+  .menu-item{display:flex;align-items:center;gap:10px;width:100%;text-align:start;
+    font:inherit;font-size:13px;padding:10px 12px;border-radius:10px;cursor:pointer;
+    border:0;background:transparent;color:var(--text);transition:background-color .12s ease}
+  .menu-item:hover{background:var(--soft)}
+  .menu-item:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .menu-item.danger{color:var(--bad)}
+  body[data-theme="dark"] .menu-item.danger,
+  body[data-theme="vdark"] .menu-item.danger{color:#F2A49B}
+  .menu-item.danger:hover{background:rgba(192,57,43,.14)}
+  .menu-sep{height:1px;background:var(--line);margin:5px 2px}
+
+  /* ── narrow screens: cards instead of a table nobody can read ── */
+  .cards{display:none;gap:12px}
+  .ucard{border:1px solid var(--line);background:var(--soft);border-radius:16px;padding:14px}
+  body[data-theme="light"] .ucard{background:#fff}
+  .ucard-top{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+  .ucard-top b{font-size:14.5px;font-weight:700;flex:1;min-width:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ucard-sub{font-size:12px;color:var(--muted);margin-bottom:11px;
+    display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .ucard-foot{display:flex;justify-content:space-between;align-items:center;
+    margin-top:7px;font-size:12px}
+  .ucard-foot b{font-weight:700}
+  .ucard-foot span{color:var(--muted)}
+  /* A value like "0 B" is a left-to-right phrase. Dropped into a Persian
+     sentence it comes out as "B 0", so numbers are isolated. */
+  .mono,.quota-label,.ucard-foot b,.ucard-foot span{
+    direction:ltr;unicode-bidi:isolate}
+  .live{width:9px;height:9px;border-radius:50%;flex:0 0 9px;background:var(--ok)}
+  .live.off{background:var(--muted);opacity:.6}
+  .live.bad{background:var(--bad)}
+  @media (max-width:860px){
+    .header{padding:10px 14px;gap:10px}
+    .logo-text b{font-size:14px}
+    .logo-text span{display:none}
+    .logo-mark{width:34px;height:34px;font-size:15px}
+    .who{display:none}
+    .head-actions{gap:7px}
+    .icon-btn{padding:7px 11px;font-size:12px}
+    .tabs{padding:10px 14px 0;gap:6px}
+    .tab{padding:8px 13px;font-size:13px}
+    .scroll table{display:none}
+    .cards{display:grid}
+    main{padding:14px 14px 70px}
+    .toolbar{gap:10px}
+    .card{padding:14px}
+  }
+
   .tag{display:inline-block;font-size:11px;padding:2.5px 9px;border-radius:999px;
     border:1px solid var(--dark-border);opacity:.92}
   body[data-theme="light"] .tag{border-color:var(--light-border)}
@@ -783,10 +846,10 @@ function render(){
       esc(i.node_name), i.clients,
       i.enabled ? `<span class="tag ok">${T('on')}</span>` : `<span class="tag">${T('off')}</span>`,
       `<div class="row-actions">
-         <button class="btn-s" onclick="toggleInbound(${i.id})">${i.enabled?T('disable'):T('enable')}</button>
-         <button class="btn-danger" onclick="delInbound(${i.id})">${T('del')}</button>
+         <button class="kebab" aria-label="actions"
+           onclick="inboundMenu(event,${i.id})">\u22EE</button>
        </div>`
-    ]));
+    ]) ) + inboundCards();
   document.getElementById('inb-count').textContent =
     `${D.inbounds.length} ${T('count_inb')}`;
 
@@ -797,14 +860,10 @@ function render(){
       `<span class="mono">${bytes(u.total)}</span>`,
       quotaCell(u), expiryCell(u), stateTag(u),
       `<div class="row-actions">
-         <button class="btn-s" onclick="showQR(${u.id})">${T('qr')}</button>
-         <button class="btn-s" onclick="editUser(${u.id})">${T('edit')}</button>
-         <button class="btn-s" onclick="toggleUser(${u.id})">${u.enabled?T('disable'):T('enable')}</button>
-         <button class="btn-s" onclick="resetUser(${u.id})">${T('reset')}</button>
-         <button class="btn-s" onclick="rotateUser(${u.id})">${T('rotate')}</button>
-         <button class="btn-danger" onclick="delUser(${u.id})">${T('del')}</button>
+         <button class="kebab" aria-label="actions"
+           onclick="userMenu(event,${u.id})">\u22EE</button>
        </div>`
-    ]));
+    ]) ) + userCards();
   document.getElementById('usr-count').textContent =
     `${D.users.length} ${T('count_usr')}`;
 
@@ -1237,6 +1296,134 @@ function mgUse(path){
   document.getElementById('mgFile').value = '';
   document.getElementById('mgPath').value = path;
   document.getElementById('mgForm').requestSubmit();
+}
+
+
+/* ── action menu ─────────────────────────────────────────────────────
+   One round button per row opens this. It is appended to the body and
+   positioned by hand, because a menu inside a horizontally scrolling
+   table gets clipped the moment it opens. */
+let MENU = null;
+function closeMenu(){ if(MENU){ MENU.remove(); MENU = null; } }
+document.addEventListener('click', e => {
+  if(MENU && !MENU.contains(e.target) && !e.target.closest('.kebab')) closeMenu();
+});
+document.addEventListener('keydown', e => { if(e.key === 'Escape') closeMenu(); });
+window.addEventListener('resize', closeMenu);
+window.addEventListener('scroll', closeMenu, true);
+
+function openMenu(btn, items){
+  const reopening = MENU && MENU.dataset.owner === btn.dataset.mid;
+  closeMenu();
+  if(reopening) return;              // a second tap closes it
+  const m = document.createElement('div');
+  m.className = 'menu';
+  m.dataset.owner = btn.dataset.mid || '';
+  m.innerHTML = items.map((it, i) => it.sep
+    ? '<div class="menu-sep"></div>'
+    : `<button class="menu-item${it.danger ? ' danger' : ''}" data-i="${i}">
+         <span>${esc(it.label)}</span></button>`).join('');
+  document.body.appendChild(m);
+
+  const r = btn.getBoundingClientRect();
+  const w = m.offsetWidth, h = m.offsetHeight;
+  const rtl = document.body.getAttribute('dir') === 'rtl';
+  let left = rtl ? r.left : r.right - w;
+  left = Math.max(8, Math.min(left, innerWidth - w - 8));
+  let top = r.bottom + 6;
+  if(top + h > innerHeight - 8) top = Math.max(8, r.top - h - 6);
+  m.style.left = left + 'px';
+  m.style.top = top + 'px';
+
+  m.querySelectorAll('.menu-item').forEach(b => b.onclick = () => {
+    const it = items[+b.dataset.i];
+    closeMenu();
+    it.fn();
+  });
+  MENU = m;
+  const first = m.querySelector('.menu-item');
+  if(first) first.focus();
+}
+
+function userMenu(ev, id){
+  ev.stopPropagation();
+  const u = D.users.find(x => x.id === id);
+  if(!u) return;
+  const btn = ev.currentTarget;
+  btn.dataset.mid = 'u' + id;
+  openMenu(btn, [
+    {label:T('qr'),     fn:() => showQR(id)},
+    {label:T('edit'),   fn:() => editUser(id)},
+    {label:u.enabled ? T('disable') : T('enable'), fn:() => toggleUser(id)},
+    {label:T('reset'),  fn:() => resetUser(id)},
+    {label:T('rotate'), fn:() => rotateUser(id)},
+    {sep:true},
+    {label:T('del'), danger:true, fn:() => delUser(id)},
+  ]);
+}
+
+function inboundMenu(ev, id){
+  ev.stopPropagation();
+  const i = D.inbounds.find(x => x.id === id);
+  if(!i) return;
+  const btn = ev.currentTarget;
+  btn.dataset.mid = 'i' + id;
+  openMenu(btn, [
+    {label:i.enabled ? T('disable') : T('enable'), fn:() => toggleInbound(id)},
+    {sep:true},
+    {label:T('del'), danger:true, fn:() => delInbound(id)},
+  ]);
+}
+
+/* ── card lists for narrow screens ───────────────────────────────────
+   A six-column table on a phone is a table nobody can read, so the same
+   data is also laid out as cards and CSS picks one. */
+function userCards(){
+  if(!D.users.length) return '';
+  return `<div class="cards">` + D.users.map(u => {
+    const pct = u.quota ? Math.min(100, Math.round(u.total * 100 / u.quota)) : 0;
+    const cls = pct >= 100 ? 'max' : (pct > 80 ? 'hot' : '');
+    const live = !u.enabled ? 'off' : ((u.expired || u.over_quota) ? 'bad' : '');
+    return `<div class="ucard">
+      <div class="ucard-top">
+        <span class="live ${live}"></span>
+        <b>${esc(u.email)}</b>
+        <button class="kebab" aria-label="actions"
+          onclick="userMenu(event,${u.id})">\u22EE</button>
+      </div>
+      <div class="ucard-sub">
+        <span>${esc(u.inbound || '—')}</span>
+        ${expiryCell(u)} ${stateTag(u)}
+      </div>
+      ${u.quota ? `<div class="bar"><i class="${cls}" style="width:${pct}%"></i></div>` : ''}
+      <div class="ucard-foot">
+        <b>${bytes(u.total)}</b>
+        <span>${u.quota ? bytes(u.quota) : T('unlimited')}</span>
+      </div>
+    </div>`;
+  }).join('') + `</div>`;
+}
+
+function inboundCards(){
+  if(!D.inbounds.length) return '';
+  return `<div class="cards">` + D.inbounds.map(i => `
+    <div class="ucard">
+      <div class="ucard-top">
+        <span class="live ${i.enabled ? '' : 'off'}"></span>
+        <b>${esc(i.remark)}</b>
+        <button class="kebab" aria-label="actions"
+          onclick="inboundMenu(event,${i.id})">\u22EE</button>
+      </div>
+      <div class="ucard-sub">
+        <span class="mono">${esc(i.protocol)}:${i.port}</span>
+        <span class="mono">${esc(i.transport)} · ${esc(i.security)}</span>
+        ${i.private ? `<span class="tag warn">${T('priv')}</span>` : ''}
+      </div>
+      <div class="ucard-foot">
+        <b>${i.clients} ${T('count_usr')}</b>
+        <span>${esc(i.node_name || '')}</span>
+      </div>
+    </div>`).join('') + `</div>`;
 }
 
 /* ── start up last, so every function and every piece of state above
