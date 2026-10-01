@@ -40,7 +40,9 @@ const (
 
 // Inbound is the *resolved* inbound of a client — the one source of truth.
 type Inbound struct {
-	ID       int64
+	ID int64
+	// Brand overrides the name customers see; empty uses DefaultBrand.
+	Brand    string
 	Remark   string
 	Protocol string // vless, vmess, trojan, shadowsocks, hysteria2, tuic, anytls
 	Port     int
@@ -84,22 +86,52 @@ type Client struct {
 	// one customer run xtls-rprx-vision while the rest run none, and a
 	// link that disagrees with the server simply fails to connect.
 	Flow string
+	// QuotaBytes and Timed are only used for the label the customer
+	// sees; zero and false mean unlimited.
+	QuotaBytes int64
+	Timed      bool
 }
 
-// DisplayName is the label a customer's app shows for this config. It
-// has to name the person as well as the inbound: an operator with three
-// configs on one inbound otherwise sees three identical entries, and a
-// customer who is sent a link cannot tell which account it is.
+// DefaultBrand is the name customers see on their configs. It is set
+// once at start-up from a flag and read-only afterwards; the panel and
+// the shop in front of it can carry different names.
+var DefaultBrand = "HAMI"
+
+// DisplayName is the label a customer's app shows for this config.
+//
+// It answers the customer's question, not the operator's: which service
+// is this, how much is on it, and does it expire. The account name is
+// deliberately absent — it is an internal identifier, and on a config
+// sold through a bot it would print the buyer's own chat id back at
+// them. Which customer a subscription belongs to is carried by the
+// subscription's title instead.
 func DisplayName(in Inbound, c Client) string {
-	switch {
-	case in.Remark != "" && c.Email != "":
-		return in.Remark + "-" + c.Email
-	case c.Email != "":
-		return c.Email
-	case in.Remark != "":
-		return in.Remark
+	brand := in.Brand
+	if brand == "" {
+		brand = DefaultBrand
 	}
-	return "hami"
+	parts := []string{brand}
+	if c.QuotaBytes > 0 {
+		parts = append(parts, humanGB(c.QuotaBytes))
+	} else {
+		parts = append(parts, "نامحدود")
+	}
+	if c.Timed {
+		parts = append(parts, "ماهانه")
+	} else {
+		parts = append(parts, "بدون‌انقضا")
+	}
+	return strings.Join(parts, "-")
+}
+
+// humanGB renders a quota the way a customer bought it: whole gigabytes
+// when it divides evenly, one decimal when it does not.
+func humanGB(b int64) string {
+	const gb = 1 << 30
+	if b%gb == 0 {
+		return fmt.Sprintf("%dGB", b/gb)
+	}
+	return strings.TrimSuffix(fmt.Sprintf("%.1f", float64(b)/float64(gb)), ".0") + "GB"
 }
 
 // FlowFor reports the flow this client actually uses on this inbound.

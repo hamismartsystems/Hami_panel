@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hamismartsystems/hami_panel/internal/link"
 	"github.com/hamismartsystems/hami_panel/internal/store"
 )
 
@@ -81,7 +82,10 @@ func (s *Server) handleSub(w http.ResponseWriter, r *http.Request) {
 	// the customer's app is nameless, which is what the operator sees as
 	// "it does not show the name" even though every config inside is
 	// labelled correctly.
-	w.Header().Set("Profile-Title", profileTitle(c.Email))
+	// The title names the service, not the account: an account name is
+	// internal, and on a config sold through a bot it would print the
+	// buyer's own identifier back at them.
+	w.Header().Set("Profile-Title", profileTitle(subscriptionTitle(*c)))
 	w.Header().Set("Profile-Update-Interval", "12")
 	w.Header().Set("Profile-Web-Page-Url", s.SubURL(token)+"/status")
 	// clients that get zero links must not cache an empty list for hours
@@ -169,6 +173,15 @@ table{margin:14px auto;font-size:14px}td{padding:5px 10px;text-align:right}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(page))
+}
+
+// subscriptionTitle is what the customer sees the subscription called.
+func subscriptionTitle(c store.Client) string {
+	return link.DisplayName(link.Inbound{}, link.Client{
+		Email:      c.Email,
+		QuotaBytes: c.TotalBytes,
+		Timed:      c.ExpireAt != nil && !c.ExpireAt.IsZero(),
+	})
 }
 
 // profileTitle encodes the subscription's name the way clients expect.

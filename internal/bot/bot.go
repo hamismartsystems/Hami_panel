@@ -2,6 +2,8 @@ package bot
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
@@ -522,7 +524,9 @@ func (b *Bot) operatorDecision(ctx context.Context, actor *store.BotUser, data s
 
 func (b *Bot) deliver(ctx context.Context, u *store.BotUser, o *store.Order) {
 	p, _ := PlanByKey(o.Plan)
-	email := fmt.Sprintf("tg%d-%d", o.TelegramID, o.ID)
+	// The account name ends up in the core's logs and in the customer's
+	// own app, so it carries the order rather than the buyer's chat id.
+	email := fmt.Sprintf("scorpion-%d-%s", o.ID, shortID())
 
 	// Which inbound the account goes on. The operator can pin one; with
 	// nothing pinned the panel picks the least loaded public inbound,
@@ -653,6 +657,16 @@ func DeliveryText(p Plan, gb int, subURL, configLink, support string) string {
 const telegramCaptionLimit = 1024
 
 /* ── small helpers ────────────────────────────────────────────────── */
+
+// shortID is four hex characters, enough to keep two orders apart if
+// one is ever retried into a second account.
+func shortID() string {
+	var b [2]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "0000"
+	}
+	return hex.EncodeToString(b[:])
+}
 
 func idOf(data string) int64 {
 	i := strings.LastIndex(data, ":")

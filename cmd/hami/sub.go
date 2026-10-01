@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/hamismartsystems/hami_panel/internal/link"
 	"github.com/hamismartsystems/hami_panel/internal/store"
 	"github.com/hamismartsystems/hami_panel/internal/subs"
 )
@@ -22,10 +23,15 @@ func subCmd(args []string) int {
 	dbPath := fs.String("db", "", "")
 	addr := fs.String("addr", ":8080", "")
 	baseURL := fs.String("base-url", "", "public base url for links/QR")
+	brand := fs.String("brand", "", "name customers see on their configs")
 	fs.SetOutput(os.Stderr)
 	if err := fs.Parse(args[1:]); err != nil || *dbPath == "" {
 		return 2
 	}
+	if *brand != "" {
+		link.DefaultBrand = *brand
+	}
+
 	st, err := store.Open(*dbPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "open db: %v\n", err)

@@ -81,6 +81,9 @@ func LinkOf(e Entry) (string, error) {
 		UUID: e.Client.UUID, Password: e.Client.Password, Email: e.Client.Email,
 		Method: e.Client.Method, SSPassword: e.Client.SSPassword,
 		Flow: e.Client.Flow,
+		// what the customer's app will show on the config
+		QuotaBytes: e.Client.TotalBytes,
+		Timed:      e.Client.ExpireAt != nil && !e.Client.ExpireAt.IsZero(),
 	})
 }
 

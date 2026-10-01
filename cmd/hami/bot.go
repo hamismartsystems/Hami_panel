@@ -11,6 +11,7 @@ import (
 
 	"github.com/hamismartsystems/hami_panel/internal/apply"
 	"github.com/hamismartsystems/hami_panel/internal/bot"
+	"github.com/hamismartsystems/hami_panel/internal/link"
 	"github.com/hamismartsystems/hami_panel/internal/store"
 )
 
@@ -51,6 +52,7 @@ func botServe(args []string) int {
 	card := fs.String("card", "", "")
 	bank := fs.String("bank", "", "")
 	holder := fs.String("holder", "", "")
+	brand := fs.String("brand", "", "name customers see on their configs")
 	support := fs.String("support", "", "")
 	inbound := fs.Int64("inbound", 0, "inbound for new accounts; 0 = least loaded")
 	xrayConfig := fs.String("xray-config", "", "")
@@ -67,6 +69,10 @@ func botServe(args []string) int {
 		fmt.Fprintln(os.Stderr,
 			"bot serve: -admin is required, otherwise nobody can approve a receipt")
 		return 2
+	}
+
+	if *brand != "" {
+		link.DefaultBrand = *brand
 	}
 
 	st, err := store.Open(*dbPath)

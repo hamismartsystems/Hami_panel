@@ -159,3 +159,48 @@ func withProto(b Inbound, proto string) Inbound {
 	b.Protocol = proto
 	return b
 }
+
+// The label is for the customer, not the operator: which service, how
+// much, and whether it expires. It must never print the buyer's chat id
+// back at them, which is what the internal account name would do.
+func TestDisplayNameReadsLikeAProduct(t *testing.T) {
+	prev := DefaultBrand
+	DefaultBrand = "Scorpion"
+	defer func() { DefaultBrand = prev }()
+
+	in := Inbound{Remark: "Reality-443"}
+	for _, tc := range []struct {
+		name  string
+		c     Client
+		brand string
+		want  string
+	}{
+		{"monthly ten gigs",
+			Client{Email: "tg223351591-3", QuotaBytes: 10 << 30, Timed: true}, "", "Scorpion-10GB-ماهانه"},
+		{"untimed fifty gigs",
+			Client{Email: "HeidarGh", QuotaBytes: 50 << 30}, "", "Scorpion-50GB-بدون‌انقضا"},
+		{"no quota at all",
+			Client{Email: "x", Timed: true}, "", "Scorpion-نامحدود-ماهانه"},
+		{"half a gigabyte",
+			Client{Email: "x", QuotaBytes: 1536 << 20}, "", "Scorpion-1.5GB-بدون‌انقضا"},
+		{"per-inbound brand wins",
+			Client{Email: "x", QuotaBytes: 10 << 30, Timed: true}, "HAMI", "HAMI-10GB-ماهانه"},
+	} {
+		i := in
+		i.Brand = tc.brand
+		if got := DisplayName(i, tc.c); got != tc.want {
+			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestDisplayNameNeverLeaksTheAccountName(t *testing.T) {
+	prev := DefaultBrand
+	DefaultBrand = "Scorpion"
+	defer func() { DefaultBrand = prev }()
+	got := DisplayName(Inbound{Remark: "Reality-443"},
+		Client{Email: "tg223351591-3", QuotaBytes: 10 << 30, Timed: true})
+	if strings.Contains(got, "223351591") || strings.Contains(got, "tg") {
+		t.Errorf("the label %q contains the buyer's internal account name", got)
+	}
+}
