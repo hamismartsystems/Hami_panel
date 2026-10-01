@@ -155,6 +155,35 @@ var migrations = []string{
 	// cannot say who is online, which is the first thing an operator
 	// looks at. Appended last: the list is index-based.
 	`ALTER TABLE clients ADD COLUMN last_seen TEXT NOT NULL DEFAULT '';`,
+	// The sales bot: who it has talked to, what they hold, what they
+	// bought. Same database as the customers, so an order and the
+	// account it produced cannot drift apart. Appended last.
+	`CREATE TABLE IF NOT EXISTS bot_users (
+		telegram_id INTEGER PRIMARY KEY,
+		username    TEXT NOT NULL DEFAULT '',
+		first_name  TEXT NOT NULL DEFAULT '',
+		balance     INTEGER NOT NULL DEFAULT 0,
+		is_reseller INTEGER NOT NULL DEFAULT 0,
+		created_at  TEXT NOT NULL
+	);`,
+	`CREATE TABLE IF NOT EXISTS bot_orders (
+		id          INTEGER PRIMARY KEY AUTOINCREMENT,
+		telegram_id INTEGER NOT NULL,
+		plan        TEXT NOT NULL,
+		gb          INTEGER NOT NULL,
+		price       INTEGER NOT NULL,
+		list_price  INTEGER NOT NULL,
+		status      TEXT NOT NULL DEFAULT 'pending',
+		paid_from   TEXT NOT NULL DEFAULT '',
+		client_id   INTEGER NOT NULL DEFAULT 0,
+		email       TEXT NOT NULL DEFAULT '',
+		created_at  TEXT NOT NULL
+	);`,
+	`CREATE INDEX IF NOT EXISTS idx_bot_orders_user ON bot_orders(telegram_id, id);`,
+	`CREATE TABLE IF NOT EXISTS bot_state (
+		key   TEXT PRIMARY KEY,
+		value TEXT NOT NULL
+	);`,
 }
 
 func (s *Store) migrate() error {

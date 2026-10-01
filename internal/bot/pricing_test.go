@@ -1,0 +1,201 @@
+package bot
+
+import (
+	"path/filepath"
+	"testing"
+
+	"github.com/hamismartsystems/hami_panel/internal/store"
+)
+
+func TestTheOperatorsPrices(t *testing.T) {
+	monthly, ok := PlanByKey("monthly")
+	if !ok {
+		t.Fatal("no monthly plan")
+	}
+	forever, ok := PlanByKey("forever")
+	if !ok {
+		t.Fatal("no untimed plan")
+	}
+	if monthly.PerGB != 20000 || monthly.Days != 30 {
+		t.Errorf("monthly is %d toman per GB for %d days", monthly.PerGB, monthly.Days)
+	}
+	if forever.PerGB != 50000 || forever.Days != 0 {
+		t.Errorf("untimed is %d toman per GB, days %d", forever.PerGB, forever.Days)
+	}
+
+	for _, tc := range []struct {
+		plan  string
+		gb    int
+		price int64
+	}{
+		{"monthly", 1, 20000},
+		{"monthly", 10, 200000},
+		{"monthly", 50, 1000000},
+		{"forever", 1, 50000},
+		{"forever", 10, 500000},
+		{"forever", 30, 1500000},
+	} {
+		p, _ := PlanByKey(tc.plan)
+		q, err := QuoteFor(p, tc.gb, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if q.Price != tc.price {
+			t.Errorf("%s %dGB = %d, want %d", tc.plan, tc.gb, q.Price, tc.price)
+		}
+	}
+}
+
+func TestResellerPaysHalf(t *testing.T) {
+	for _, key := range []string{"monthly", "forever"} {
+		p, _ := PlanByKey(key)
+		for _, gb := range []int{1, 7, 10, 33, 100} {
+			normal, _ := QuoteFor(p, gb, false)
+			reseller, _ := QuoteFor(p, gb, true)
+			if reseller.Price*2 != normal.Price {
+				t.Errorf("%s %dGB: reseller pays %d, half of %d is %d",
+					key, gb, reseller.Price, normal.Price, normal.Price/2)
+			}
+			if reseller.ListPrice != normal.Price {
+				t.Errorf("%s %dGB: the reseller should still see the %d list price, got %d",
+					key, gb, normal.Price, reseller.ListPrice)
+			}
+			if reseller.Saved() != normal.Price/2 {
+				t.Errorf("%s %dGB: saved %d", key, gb, reseller.Saved())
+			}
+		}
+	}
+}
+
+func TestNonsenseVolumesAreRefused(t *testing.T) {
+	p, _ := PlanByKey("monthly")
+	for _, gb := range []int{0, -1, -100, MaxGB + 1, 999999} {
+		if _, err := QuoteFor(p, gb, false); err == nil {
+			t.Errorf("%d gigabytes was accepted", gb)
+		}
+	}
+}
+
+func TestTomanReadsLikeAPrice(t *testing.T) {
+	for _, tc := range []struct {
+		in   int64
+		want string
+	}{
+		{0, "0"}, {999, "999"}, {1000, "1,000"}, {20000, "20,000"},
+		{200000, "200,000"}, {1500000, "1,500,000"}, {-5000, "-5,000"},
+	} {
+		if got := Toman(tc.in); got != tc.want {
+			t.Errorf("Toman(%d) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+/* ── the wallet, where a mistake is somebody's money ──────────────── */
+
+func openStore(t *testing.T) *store.Store {
+	t.Helper()
+	st, err := store.Open(filepath.Join(t.TempDir(), "panel.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	return st
+}
+
+func TestWalletNeverGoesNegative(t *testing.T) {
+	st := openStore(t)
+	if _, err := st.UpsertBotUser(111, "someone", "Some"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.WalletAdd(111, 100000); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.WalletAdd(111, -150000); err == nil {
+		t.Fatal("a wallet was allowed to pay more than it held")
+	}
+	u, _ := st.BotUser(111)
+	if u.Balance != 100000 {
+		t.Errorf("balance = %d after a refused charge, want it untouched", u.Balance)
+	}
+	if _, err := st.WalletAdd(111, -100000); err != nil {
+		t.Fatalf("spending the exact balance should work: %v", err)
+	}
+	u, _ = st.BotUser(111)
+	if u.Balance != 0 {
+		t.Errorf("balance = %d", u.Balance)
+	}
+}
+
+func TestUpsertKeepsBalanceAndResellerFlag(t *testing.T) {
+	st := openStore(t)
+	if _, err := st.UpsertBotUser(222, "shop", "Shop"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.WalletAdd(222, 500000); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetReseller(222, true); err != nil {
+		t.Fatal(err)
+	}
+	// they say /start again
+	if _, err := st.UpsertBotUser(222, "shop-renamed", "Shop"); err != nil {
+		t.Fatal(err)
+	}
+	u, _ := st.BotUser(222)
+	if u.Balance != 500000 {
+		t.Errorf("saying hello again wiped the balance: %d", u.Balance)
+	}
+	if !u.IsReseller {
+		t.Error("saying hello again removed the reseller rate")
+	}
+	if u.Username != "shop-renamed" {
+		t.Errorf("username not refreshed: %q", u.Username)
+	}
+}
+
+// Tapping approve twice must not hand out two accounts.
+func TestAnOrderIsDeliveredOnce(t *testing.T) {
+	st := openStore(t)
+	if _, err := st.UpsertBotUser(333, "buyer", "B"); err != nil {
+		t.Fatal(err)
+	}
+	o := &store.Order{TelegramID: 333, Plan: "monthly", GB: 10,
+		Price: 200000, ListPrice: 200000}
+	if err := st.CreateOrder(o); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.MarkOrder(o.ID, store.OrderPaid, "card"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AttachOrderClient(o.ID, 42, "scorp-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.MarkOrder(o.ID, store.OrderPaid, "card"); err == nil {
+		t.Error("a delivered order was moved back, which would deliver it twice")
+	}
+	got, _ := st.GetOrder(o.ID)
+	if got.Status != store.OrderDelivered || got.ClientID != 42 {
+		t.Errorf("order = %+v", got)
+	}
+}
+
+func TestOrderHistoryIsNewestFirst(t *testing.T) {
+	st := openStore(t)
+	if _, err := st.UpsertBotUser(444, "b", "B"); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		if err := st.CreateOrder(&store.Order{
+			TelegramID: 444, Plan: "monthly", GB: i + 1, Price: 1, ListPrice: 1,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	list, err := st.OrdersOf(444, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 3 || list[0].GB != 3 {
+		t.Errorf("history = %+v", list)
+	}
+}
