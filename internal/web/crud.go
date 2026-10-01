@@ -19,7 +19,13 @@ func decode(w http.ResponseWriter, r *http.Request, dst any) error {
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
 		return json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(dst)
 	}
-	if err := r.ParseForm(); err != nil {
+	// ParseForm alone ignores a multipart body, so a client posting a
+	// form that way would have every field silently dropped.
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		if err := r.ParseMultipartForm(1 << 20); err != nil {
+			return err
+		}
+	} else if err := r.ParseForm(); err != nil {
 		return err
 	}
 	m := map[string]any{}
@@ -392,4 +398,109 @@ func (s *Server) subURL(r *http.Request) string {
 		scheme = p
 	}
 	return scheme + "://" + r.Host
+}
+
+/* ── inbound edit ────────────────────────────────────────────────────── */
+
+type inboundUpdateReq struct {
+	Remark      *string   `json:"remark"`
+	Host        *string   `json:"host"`
+	Port        *flexInt  `json:"port"`
+	SNI         *string   `json:"sni"`
+	Dest        *string   `json:"dest"`
+	Fingerprint *string   `json:"fingerprint"`
+	Path        *string   `json:"path"`
+	XHTTPMode   *string   `json:"xhttp_mode"`
+	HeaderType  *string   `json:"header_type"`
+	Flow        *string   `json:"flow"`
+	NodeID      *flexInt  `json:"node_id"`
+	Private     *flexBool `json:"private"`
+}
+
+// apiInboundUpdate edits an existing inbound instead of making the
+// operator delete it and start again, which on a live server means
+// taking every customer on it offline.
+func (s *Server) apiInboundUpdate(w http.ResponseWriter, r *http.Request, a *store.Admin) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "bad id"})
+		return
+	}
+	in, err := s.Store.GetInbound(id)
+	if err != nil || in == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "inbound not found"})
+		return
+	}
+	var req inboundUpdateReq
+	if err := decode(w, r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "malformed request"})
+		return
+	}
+
+	before := *in
+	var changes []string
+	set := func(name string, dst *string, src *string) {
+		if src == nil || *src == *dst {
+			return
+		}
+		*dst = strings.TrimSpace(*src)
+		changes = append(changes, name)
+	}
+	set("name", &in.Remark, req.Remark)
+	set("address", &in.Host, req.Host)
+	set("sni", &in.SNI, req.SNI)
+	set("fingerprint", &in.Fingerprint, req.Fingerprint)
+	set("path", &in.Path, req.Path)
+	set("mode", &in.XHTTPMode, req.XHTTPMode)
+	set("header", &in.HeaderType, req.HeaderType)
+	if req.Flow != nil {
+		f := strings.TrimSpace(*req.Flow)
+		if f == "none" {
+			f = ""
+		}
+		if f != in.Flow {
+			in.Flow, changes = f, append(changes, "flow")
+		}
+	}
+	if req.Port != nil && int(*req.Port) != in.Port {
+		in.Port = int(*req.Port)
+		changes = append(changes, "port")
+	}
+	if req.NodeID != nil && int64(*req.NodeID) != in.NodeID {
+		in.NodeID = int64(*req.NodeID)
+		changes = append(changes, "node")
+	}
+	if req.Private != nil && bool(*req.Private) != in.IsPrivate {
+		in.IsPrivate = bool(*req.Private)
+		changes = append(changes, "private")
+	}
+
+	if err := s.Store.UpdateInbound(in); err != nil {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		return
+	}
+	if req.Dest != nil {
+		if sec, err := s.Store.GetInboundSecret(id); err == nil &&
+			strings.TrimSpace(*req.Dest) != sec.Dest {
+			if err := s.Store.UpdateInboundDest(id, strings.TrimSpace(*req.Dest)); err != nil {
+				writeJSON(w, http.StatusUnprocessableEntity,
+					map[string]string{"error": err.Error()})
+				return
+			}
+			changes = append(changes, "dest")
+		}
+	}
+
+	// Moving the address or the port rewrites every link on this
+	// inbound. Subscriptions catch up on their own; a pasted config
+	// does not, and the operator needs to know that before customers do.
+	relinked := before.Host != in.Host || before.Port != in.Port
+
+	_ = s.Store.AddEvent("info", a.Username,
+		"updated inbound "+in.Remark+" ("+strings.Join(changes, ", ")+")", "via=hp-ui")
+	s.Apply.Schedule()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "changed": len(changes), "fields": changes,
+		"links_changed": relinked,
+	})
 }

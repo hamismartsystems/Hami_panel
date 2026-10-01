@@ -615,6 +615,54 @@
   </form>
 </div>
 
+<div class="backdrop" id="m-inbedit">
+  <form class="modal" onsubmit="return submitInboundEdit(event)">
+    <h3 data-i18n="edit_inbound">Edit inbound</h3>
+    <p class="hint" data-i18n="inbedit_hint">Protocol, transport and security cannot
+      change — that would be a different inbound. To rotate Reality keys use
+      the command line.</p>
+    <div class="err-line" id="inbedit-err"></div>
+    <input type="hidden" id="inbedit-id">
+    <div class="fgrid">
+      <div class="field"><label data-i18n="f_remark">Name</label>
+        <input id="inbedit-remark" name="remark" required></div>
+      <div class="field"><label data-i18n="f_port">Port</label>
+        <input id="inbedit-port" name="port" type="number" min="1" max="65535" required></div>
+    </div>
+    <div class="field"><label data-i18n="f_host">Address for clients</label>
+      <input id="inbedit-host" name="host" class="mono" required>
+      <small data-i18n="inbedit_warn">Changing the address or the port rewrites every
+        link on this inbound</small></div>
+    <div class="fgrid">
+      <div class="field"><label data-i18n="f_sni">SNI</label>
+        <input id="inbedit-sni" name="sni" class="mono"></div>
+      <div class="field"><label data-i18n="f_dest">Dest</label>
+        <input id="inbedit-dest" name="dest" class="mono"></div>
+    </div>
+    <div class="fgrid">
+      <div class="field"><label data-i18n="f_fp">Fingerprint</label>
+        <input id="inbedit-fp" name="fingerprint" class="mono"></div>
+      <div class="field"><label data-i18n="f_flow">Flow</label>
+        <select id="inbedit-flow" name="flow">
+          <option value="none" data-i18n="mg_flow_none">No flow</option>
+          <option value="xtls-rprx-vision">xtls-rprx-vision</option>
+        </select></div>
+    </div>
+    <div class="fgrid">
+      <div class="field"><label data-i18n="f_path">Path</label>
+        <input id="inbedit-path" name="path" class="mono"></div>
+      <div class="field"><label data-i18n="f_node">Node</label>
+        <select id="inbedit-node" name="node_id"></select></div>
+    </div>
+    <label class="chk"><input type="checkbox" id="inbedit-private" name="private">
+      <span data-i18n="f_private">Private (admin only)</span></label>
+    <div class="modal-actions">
+      <button type="button" class="btn-ghost" onclick="closeM('m-inbedit')" data-i18n="cancel">Cancel</button>
+      <button type="submit" class="btn-p" data-i18n="save">Save</button>
+    </div>
+  </form>
+</div>
+
 <div class="backdrop" id="m-details">
   <div class="modal">
     <h3 id="det-title"></h3>
@@ -705,6 +753,12 @@ const I18N = {
       mg_found_here:"Panels found on this server",
       mg_found_none:"No other panel found on this server. Upload its database instead.",
       mg_or:"or point at it yourself",
+      edit_inbound:"Edit inbound",
+      inbedit_hint:"Protocol, transport and security cannot change — that would be a different inbound. To rotate Reality keys use the command line.",
+      inbedit_warn:"changing the address or the port rewrites every link on this inbound",
+      inb_relinked:"Saved — every link on this inbound changed; subscriptions update on their own",
+      f_host:"Address for clients",f_sni:"SNI",f_dest:"Dest",f_fp:"Fingerprint",
+      f_flow:"Flow",f_path:"Path",f_node:"Node",f_private:"Private (admin only)",
       details:"Details",online:"online",offline:"idle",never:"never",
       just_now:"just now",min_ago:"min ago",hr_ago:"h ago",day_ago:"d ago",
       d_state:"State",d_lastseen:"Last seen",d_usage:"Used",d_quota:"Quota",
@@ -773,6 +827,12 @@ const I18N = {
       mg_found_here:"پنل‌هایی که روی همین سرور پیدا شد",
       mg_found_none:"پنل دیگری روی این سرور پیدا نشد. فایلش را بفرستید.",
       mg_or:"یا خودتان نشانی بدهید",
+      edit_inbound:"ویرایش ورودی",
+      inbedit_hint:"پروتکل و بستر و امنیت عوض نمی‌شوند — آن دیگر یک ورودی دیگر است. برای چرخش کلید ری‌الیتی از خط فرمان استفاده کنید.",
+      inbedit_warn:"تغییر نشانی یا پورت، همهٔ لینک‌های این ورودی را عوض می‌کند",
+      inb_relinked:"ذخیره شد — همهٔ لینک‌های این ورودی عوض شد؛ اشتراک‌ها خودشان به‌روز می‌شوند",
+      f_host:"نشانی برای مشتری‌ها",f_sni:"اس‌ان‌آی",f_dest:"مقصد",f_fp:"اثر انگشت",
+      f_flow:"فلو",f_path:"مسیر",f_node:"گره",f_private:"خصوصی (فقط مدیر)",
       details:"جزئیات",online:"آنلاین",offline:"بی‌کار",never:"هرگز",
       just_now:"همین حالا",min_ago:"دقیقه پیش",hr_ago:"ساعت پیش",day_ago:"روز پیش",
       d_state:"وضعیت",d_lastseen:"آخرین اتصال",d_usage:"مصرف",d_quota:"سهمیه",
@@ -1446,6 +1506,7 @@ function inboundMenu(ev, id){
   const btn = ev.currentTarget;
   btn.dataset.mid = 'i' + id;
   openMenu(btn, [
+    {label:T('edit'), fn:() => editInbound(id)},
     {label:i.enabled ? T('disable') : T('enable'), fn:() => toggleInbound(id)},
     {sep:true},
     {label:T('del'), danger:true, fn:() => delInbound(id)},
@@ -1542,6 +1603,53 @@ function showDetails(id){
     `<table class="det">${rows.map(([k,v]) =>
       `<tr><th>${esc(k)}</th><td>${v}</td></tr>`).join('')}</table>`;
   openM('m-details');
+}
+
+
+async function editInbound(id){
+  const i = D.inbounds.find(x => x.id === id);
+  if(!i) return;
+  document.getElementById('inbedit-id').value     = id;
+  document.getElementById('inbedit-remark').value = i.remark || '';
+  document.getElementById('inbedit-port').value   = i.port || '';
+  document.getElementById('inbedit-host').value   = i.host || '';
+  document.getElementById('inbedit-sni').value    = i.sni || '';
+  document.getElementById('inbedit-dest').value   = i.dest || '';
+  document.getElementById('inbedit-fp').value     = i.fingerprint || '';
+  document.getElementById('inbedit-path').value   = i.path || '';
+  document.getElementById('inbedit-flow').value   = i.flow ? i.flow : 'none';
+  document.getElementById('inbedit-private').checked = !!i.private;
+  const sel = document.getElementById('inbedit-node');
+  sel.innerHTML = `<option value="0">${T('thisserver')}</option>` +
+    (D.nodes||[]).filter(n => n.id !== 0).map(n =>
+      `<option value="${n.id}">${esc(n.name)}</option>`).join('');
+  sel.value = String(i.node_id || 0);
+  openM('m-inbedit');
+}
+async function submitInboundEdit(ev){
+  ev.preventDefault();
+  const id = document.getElementById('inbedit-id').value;
+  const body = {
+    remark:      document.getElementById('inbedit-remark').value.trim(),
+    port:        document.getElementById('inbedit-port').value,
+    host:        document.getElementById('inbedit-host').value.trim(),
+    sni:         document.getElementById('inbedit-sni').value.trim(),
+    dest:        document.getElementById('inbedit-dest').value.trim(),
+    fingerprint: document.getElementById('inbedit-fp').value.trim(),
+    path:        document.getElementById('inbedit-path').value.trim(),
+    flow:        document.getElementById('inbedit-flow').value,
+    node_id:     document.getElementById('inbedit-node').value,
+    private:     document.getElementById('inbedit-private').checked,
+  };
+  try{
+    const j = await api('/api/inbounds/'+id+'/update', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body)});
+    closeM('m-inbedit');
+    toast(j.links_changed ? T('inb_relinked') : T('saved'));
+    await loadAll();
+  }catch(e){ showErr('inbedit-err', e.message); }
+  return false;
 }
 
 /* ── start up last, so every function and every piece of state above

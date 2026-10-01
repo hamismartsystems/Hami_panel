@@ -98,6 +98,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/users/{id}/reset", s.requireAdmin(s.apiUserReset))
 	mux.HandleFunc("POST /api/inbounds/{id}/toggle", s.requireAdmin(s.apiInboundToggle))
 	mux.HandleFunc("POST /api/inbounds", s.requireAdmin(s.apiInboundCreate))
+	mux.HandleFunc("POST /api/inbounds/{id}/update", s.requireAdmin(s.apiInboundUpdate))
 	mux.HandleFunc("POST /api/inbounds/{id}/delete", s.requireAdmin(s.apiInboundDelete))
 	mux.HandleFunc("POST /api/users", s.requireAdmin(s.apiUserCreate))
 	mux.HandleFunc("POST /api/users/{id}/update", s.requireAdmin(s.apiUserUpdate))

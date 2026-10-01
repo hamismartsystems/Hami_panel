@@ -479,3 +479,97 @@ func TestImportCandidatesNeedsASession(t *testing.T) {
 		t.Fatalf("got %d, want 401", rec.Code)
 	}
 }
+
+func seedInbound(t *testing.T, st *store.Store, remark string, port int) *store.Inbound {
+	t.Helper()
+	in := &store.Inbound{
+		Remark: remark, Protocol: "vless", Port: port, Host: "198.51.100.10",
+		Transport: "tcp", Security: "reality", SNI: "www.example.com",
+		PublicKey: "PUB", ShortID: "aabb", Fingerprint: "chrome", Enable: true,
+	}
+	if err := st.CreateInbound(in); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetInboundSecret(store.InboundSecret{
+		InboundID: in.ID, PrivateKey: "PRIV", Dest: "www.example.com:443", Listen: "0.0.0.0",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return in
+}
+
+// Before this existed, a beginner who typed the wrong address had to
+// delete the inbound, which takes every customer on it offline.
+func TestInboundCanBeEditedInsteadOfDeleted(t *testing.T) {
+	st, h, _ := importTestServer(t)
+	cookie := loginAs(t, st, h)
+	in := seedInbound(t, st, "typo", 8443)
+
+	ctype, body := uploadBody(t, map[string]string{
+		"remark": "Reality-443", "host": "203.0.113.9", "port": "8443",
+		"sni": "www.samsung.com", "dest": "www.samsung.com:443",
+		"fingerprint": "firefox", "flow": "xtls-rprx-vision",
+	}, "")
+	rec := postMultipart(h, cookie, "/api/inbounds/"+fmt.Sprint(in.ID)+"/update", ctype, body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update: %d %s", rec.Code, rec.Body.String())
+	}
+
+	got, err := st.GetInbound(in.ID)
+	if err != nil || got == nil {
+		t.Fatal(err)
+	}
+	if got.Remark != "Reality-443" || got.Host != "203.0.113.9" ||
+		got.SNI != "www.samsung.com" || got.Fingerprint != "firefox" ||
+		got.Flow != "xtls-rprx-vision" {
+		t.Errorf("edit did not stick: %+v", got)
+	}
+	sec, _ := st.GetInboundSecret(in.ID)
+	if sec.Dest != "www.samsung.com:443" {
+		t.Errorf("dest = %q", sec.Dest)
+	}
+	// the identity of the inbound is untouched
+	if got.Protocol != "vless" || got.Transport != "tcp" || got.Security != "reality" {
+		t.Errorf("an edit changed what kind of inbound this is: %+v", got)
+	}
+	if sec.PrivateKey != "PRIV" {
+		t.Error("an edit disturbed the reality key")
+	}
+}
+
+// Moving the address or port rewrites every customer's link, and the
+// operator has to be told rather than find out from complaints.
+func TestEditReportsWhenLinksChange(t *testing.T) {
+	st, h, _ := importTestServer(t)
+	cookie := loginAs(t, st, h)
+	in := seedInbound(t, st, "in", 8443)
+
+	ctype, body := uploadBody(t, map[string]string{"sni": "www.other.com"}, "")
+	rec := postMultipart(h, cookie, "/api/inbounds/"+fmt.Sprint(in.ID)+"/update", ctype, body)
+	if v, _ := decodeBody(t, rec)["links_changed"].(bool); v {
+		t.Error("changing the sni was reported as rewriting every link")
+	}
+
+	ctype, body = uploadBody(t, map[string]string{"port": "9443"}, "")
+	rec = postMultipart(h, cookie, "/api/inbounds/"+fmt.Sprint(in.ID)+"/update", ctype, body)
+	if v, _ := decodeBody(t, rec)["links_changed"].(bool); !v {
+		t.Error("moving the port was not reported as rewriting every link")
+	}
+}
+
+func TestEditRefusesAPortAnotherInboundOwns(t *testing.T) {
+	st, h, _ := importTestServer(t)
+	cookie := loginAs(t, st, h)
+	a := seedInbound(t, st, "a", 8443)
+	seedInbound(t, st, "b", 9443)
+
+	ctype, body := uploadBody(t, map[string]string{"port": "9443"}, "")
+	rec := postMultipart(h, cookie, "/api/inbounds/"+fmt.Sprint(a.ID)+"/update", ctype, body)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("got %d, want 422", rec.Code)
+	}
+	got, _ := st.GetInbound(a.ID)
+	if got.Port != 8443 {
+		t.Errorf("the port moved anyway: %d", got.Port)
+	}
+}

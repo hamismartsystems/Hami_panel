@@ -25,6 +25,13 @@ type inboundView struct {
 	Private   bool   `json:"private"`
 	Enabled   bool   `json:"enabled"`
 	Clients   int    `json:"clients"`
+	// The rest is what the edit dialog needs to show current values.
+	Fingerprint string `json:"fingerprint"`
+	Path        string `json:"path"`
+	XHTTPMode   string `json:"xhttp_mode"`
+	HeaderType  string `json:"header_type"`
+	Flow        string `json:"flow"`
+	Dest        string `json:"dest"`
 }
 
 type userView struct {
@@ -96,11 +103,19 @@ func (s *Server) inboundViews() ([]inboundView, map[int64]string, error) {
 			nodeName = "node " + strconv.FormatInt(in.NodeID, 10)
 		}
 		titles[in.ID] = in.Remark
+		// The handshake target lives with the secrets; the edit dialog
+		// needs it, and it is not itself a secret.
+		dest := ""
+		if sec, err := s.Store.GetInboundSecret(in.ID); err == nil {
+			dest = sec.Dest
+		}
 		out = append(out, inboundView{
 			ID: in.ID, Remark: in.Remark, Protocol: in.Protocol, Port: in.Port,
 			Host: in.Host, Transport: in.Transport, Security: in.Security, SNI: in.SNI,
 			NodeID: in.NodeID, NodeName: nodeName, Private: in.IsPrivate,
 			Enabled: in.Enable, Clients: len(clients),
+			Fingerprint: in.Fingerprint, Path: in.Path, XHTTPMode: in.XHTTPMode,
+			HeaderType: in.HeaderType, Flow: in.Flow, Dest: dest,
 		})
 	}
 	return out, titles, nil
