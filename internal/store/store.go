@@ -151,6 +151,10 @@ var migrations = []string{
 	// rest run none, and importing one used to silently change somebody's
 	// connection. Appended last: the list is index-based.
 	`ALTER TABLE clients ADD COLUMN flow TEXT NOT NULL DEFAULT '';`,
+	// When a customer was last seen passing traffic. Without it the panel
+	// cannot say who is online, which is the first thing an operator
+	// looks at. Appended last: the list is index-based.
+	`ALTER TABLE clients ADD COLUMN last_seen TEXT NOT NULL DEFAULT '';`,
 }
 
 func (s *Store) migrate() error {
@@ -229,6 +233,8 @@ type Client struct {
 	// Flow overrides the inbound's flow for this one client. Empty means
 	// "whatever the inbound says".
 	Flow string
+	// LastSeen is when this client last moved a byte. Zero means never.
+	LastSeen *time.Time
 
 	CreatedAt time.Time
 }
@@ -381,13 +387,15 @@ func (s *Store) CreateClient(c *Client) error {
 func (s *Store) GetClient(id int64) (*Client, error) {
 	return scanClient(s.db.QueryRow(`SELECT id, inbound_id, uuid, password, method,
 		ss_password, email, enable, total_bytes, up_bytes, down_bytes, expire_at,
-		ip_limit, speed_limit, sub_token, created_at, flow FROM clients WHERE id = ?`, id))
+		ip_limit, speed_limit, sub_token, created_at, flow, last_seen
+		FROM clients WHERE id = ?`, id))
 }
 
 func (s *Store) ListClientsOf(inboundID int64) ([]Client, error) {
 	rows, err := s.db.Query(`SELECT id, inbound_id, uuid, password, method,
 		ss_password, email, enable, total_bytes, up_bytes, down_bytes, expire_at,
-		ip_limit, speed_limit, sub_token, created_at, flow FROM clients WHERE inbound_id = ? ORDER BY id`,
+		ip_limit, speed_limit, sub_token, created_at, flow, last_seen
+		FROM clients WHERE inbound_id = ? ORDER BY id`,
 		inboundID)
 	if err != nil {
 		return nil, err
@@ -438,12 +446,18 @@ func scanClient(row scanner) (*Client, error) {
 		enable int
 		expire sql.NullString
 		ts     string
+		seen   string
 	)
 	err := row.Scan(&c.ID, &c.InboundID, &c.UUID, &c.Password, &c.Method,
 		&c.SSPassword, &c.Email, &enable, &c.TotalBytes, &c.UpBytes, &c.DownBytes,
-		&expire, &c.IPLimit, &c.SpeedLimit, &c.SubToken, &ts, &c.Flow)
+		&expire, &c.IPLimit, &c.SpeedLimit, &c.SubToken, &ts, &c.Flow, &seen)
 	if err != nil {
 		return nil, err
+	}
+	if seen != "" {
+		if t, err := time.Parse(time.RFC3339, seen); err == nil {
+			c.LastSeen = &t
+		}
 	}
 	c.Enable = enable != 0
 	if expire.Valid {

@@ -389,6 +389,9 @@ func (s *Server) apiImportApply(w http.ResponseWriter, r *http.Request, a *store
 	}
 
 	body["ok"] = true
+	// An import that the core never hears about is an import that sold
+	// nobody anything.
+	s.Apply.Schedule()
 	_ = s.Store.AddEvent("info", a.Username, fmt.Sprintf(
 		"imported %d inbounds and %d clients from %s", res.CreatedInbounds,
 		res.CreatedClients, snap.Kind), "via=hp-ui")

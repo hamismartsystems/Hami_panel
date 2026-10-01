@@ -136,6 +136,7 @@ func (s *Server) apiInboundCreate(w http.ResponseWriter, r *http.Request, a *sto
 	}
 	_ = s.Store.AddEvent("info", a.Username,
 		"created inbound "+in.Remark+" on port "+strconv.Itoa(in.Port), "via=hp-ui")
+	s.Apply.Schedule()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok": true, "id": in.ID, "public_key": in.PublicKey, "short_id": in.ShortID,
 	})
@@ -159,6 +160,7 @@ func (s *Server) apiInboundDelete(w http.ResponseWriter, r *http.Request, a *sto
 	}
 	_ = s.Store.AddEvent("warn", a.Username,
 		"deleted inbound "+in.Remark+" and its "+strconv.Itoa(len(clients))+" users", "via=hp-ui")
+	s.Apply.Schedule()
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "removed_users": len(clients)})
 }
 
@@ -214,6 +216,7 @@ func (s *Server) apiUserCreate(w http.ResponseWriter, r *http.Request, a *store.
 	}
 	_ = s.Store.AddEvent("info", a.Username,
 		"created "+strconv.Itoa(len(created))+" user(s) starting with "+req.Email, "via=hp-ui")
+	s.Apply.Schedule()
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "created": created})
 }
 
@@ -278,6 +281,7 @@ func (s *Server) apiUserUpdate(w http.ResponseWriter, r *http.Request, a *store.
 	}
 	_ = s.Store.AddEvent("info", a.Username,
 		"updated user "+c.Email+" ("+strings.Join(changes, ", ")+")", "via=hp-ui")
+	s.Apply.Schedule()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok": true, "changed": len(changes), "reactivated": reactivated,
 	})
@@ -299,6 +303,7 @@ func (s *Server) apiUserDelete(w http.ResponseWriter, r *http.Request, a *store.
 		return
 	}
 	_ = s.Store.AddEvent("warn", a.Username, "deleted user "+c.Email, "via=hp-ui")
+	s.Apply.Schedule()
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 

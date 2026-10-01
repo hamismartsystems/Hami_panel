@@ -86,6 +86,22 @@ type Client struct {
 	Flow string
 }
 
+// DisplayName is the label a customer's app shows for this config. It
+// has to name the person as well as the inbound: an operator with three
+// configs on one inbound otherwise sees three identical entries, and a
+// customer who is sent a link cannot tell which account it is.
+func DisplayName(in Inbound, c Client) string {
+	switch {
+	case in.Remark != "" && c.Email != "":
+		return in.Remark + "-" + c.Email
+	case c.Email != "":
+		return c.Email
+	case in.Remark != "":
+		return in.Remark
+	}
+	return "hami"
+}
+
 // FlowFor reports the flow this client actually uses on this inbound.
 func FlowFor(in Inbound, c Client) string {
 	if c.Flow != "" {
@@ -210,11 +226,7 @@ func vless(in Inbound, c Client) (string, error) {
 		Host:     fmt.Sprintf("%s:%d", hostport(in.Host), in.Port),
 		RawQuery: sortedQuery(q),
 	}
-	name := in.Remark
-	if name == "" {
-		name = "hami"
-	}
-	return u.String() + "#" + url.QueryEscape(name), nil
+	return u.String() + "#" + url.QueryEscape(DisplayName(in, c)), nil
 }
 
 func vmess(in Inbound, c Client) (string, error) {
@@ -223,7 +235,7 @@ func vmess(in Inbound, c Client) (string, error) {
 	}
 	m := map[string]interface{}{
 		"v":    "2",
-		"ps":   orDefault(in.Remark, "hami"),
+		"ps":   DisplayName(in, c),
 		"add":  in.Host,
 		"port": in.Port,
 		"id":   c.UUID,
@@ -287,7 +299,7 @@ func trojan(in Inbound, c Client) (string, error) {
 		Host:     fmt.Sprintf("%s:%d", hostport(in.Host), in.Port),
 		RawQuery: sortedQuery(q),
 	}
-	return u.String() + "#" + url.QueryEscape(orDefault(in.Remark, "hami")), nil
+	return u.String() + "#" + url.QueryEscape(DisplayName(in, c)), nil
 }
 
 func shadowsocks(in Inbound, c Client) (string, error) {
@@ -300,7 +312,7 @@ func shadowsocks(in Inbound, c Client) (string, error) {
 		User:   url.User(user),
 		Host:   fmt.Sprintf("%s:%d", hostport(in.Host), in.Port),
 	}
-	return u.String() + "#" + url.QueryEscape(orDefault(in.Remark, "hami")), nil
+	return u.String() + "#" + url.QueryEscape(DisplayName(in, c)), nil
 }
 
 func hysteria2(in Inbound, c Client) (string, error) {
@@ -334,7 +346,7 @@ func hysteria2(in Inbound, c Client) (string, error) {
 		Host:     fmt.Sprintf("%s:%d", hostport(in.Host), in.Port),
 		RawQuery: sortedQuery(q),
 	}
-	return u.String() + "#" + url.QueryEscape(orDefault(in.Remark, "hami")), nil
+	return u.String() + "#" + url.QueryEscape(DisplayName(in, c)), nil
 }
 
 func tuic(in Inbound, c Client) (string, error) {
@@ -360,7 +372,7 @@ func tuic(in Inbound, c Client) (string, error) {
 		Host:     fmt.Sprintf("%s:%d", hostport(in.Host), in.Port),
 		RawQuery: sortedQuery(q),
 	}
-	return u.String() + "#" + url.QueryEscape(orDefault(in.Remark, "hami")), nil
+	return u.String() + "#" + url.QueryEscape(DisplayName(in, c)), nil
 }
 
 func anytls(in Inbound, c Client) (string, error) {
@@ -387,7 +399,7 @@ func anytls(in Inbound, c Client) (string, error) {
 		Path:     "/",
 		RawQuery: sortedQuery(q),
 	}
-	return u.String() + "#" + url.QueryEscape(orDefault(in.Remark, "hami")), nil
+	return u.String() + "#" + url.QueryEscape(DisplayName(in, c)), nil
 }
 
 /* ── subscription ─────────────────────────────────────────────────────── */

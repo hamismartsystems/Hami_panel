@@ -42,6 +42,14 @@ type userView struct {
 	Expired   bool   `json:"expired"`
 	OverQuota bool   `json:"over_quota"`
 	SubToken  string `json:"sub_token"`
+	// Online is derived from the last byte seen, not from a live socket:
+	// the core reports usage on an interval, so this is "active very
+	// recently" rather than "connected this instant".
+	Online    bool   `json:"online"`
+	LastSeen  string `json:"last_seen"`
+	Flow      string `json:"flow"`
+	IPLimit   int    `json:"ip_limit"`
+	CreatedAt string `json:"created_at"`
 }
 
 type nodeView struct {
@@ -98,11 +106,22 @@ func (s *Server) inboundViews() ([]inboundView, map[int64]string, error) {
 	return out, titles, nil
 }
 
+// OnlineWindow is how long after its last byte a client still counts as
+// online. It has to be comfortably longer than the collection interval,
+// or everyone blinks offline between runs.
+const OnlineWindow = 3 * time.Minute
+
 func userViewOf(c store.Client, inboundName string, now time.Time) userView {
 	v := userView{
 		ID: c.ID, Email: c.Email, InboundID: c.InboundID, Inbound: inboundName,
 		Enabled: c.Enable, Up: c.UpBytes, Down: c.DownBytes,
 		Total: c.UpBytes + c.DownBytes, Quota: c.TotalBytes, SubToken: c.SubToken,
+		Flow: c.Flow, IPLimit: c.IPLimit,
+		CreatedAt: c.CreatedAt.UTC().Format(time.RFC3339),
+	}
+	if c.LastSeen != nil && !c.LastSeen.IsZero() {
+		v.LastSeen = c.LastSeen.UTC().Format(time.RFC3339)
+		v.Online = now.Sub(*c.LastSeen) <= OnlineWindow
 	}
 	if c.TotalBytes > 0 && v.Total >= c.TotalBytes {
 		v.OverQuota = true
@@ -318,6 +337,7 @@ func (s *Server) apiUserToggle(w http.ResponseWriter, r *http.Request, a *store.
 		verb = "enabled"
 	}
 	_ = s.Store.AddEvent("info", a.Username, verb+" user "+c.Email, "via=hp-ui")
+	s.Apply.Schedule()
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "enabled": !c.Enable})
 }
 
@@ -334,6 +354,7 @@ func (s *Server) apiUserReset(w http.ResponseWriter, r *http.Request, a *store.A
 	}
 	_ = s.Store.AddEvent("info", a.Username, "reset usage of user "+strconv.FormatInt(id, 10),
 		"via=hp-ui")
+	s.Apply.Schedule()
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "was_up": up, "was_down": down})
 }
 
@@ -357,6 +378,7 @@ func (s *Server) apiInboundToggle(w http.ResponseWriter, r *http.Request, a *sto
 		verb = "enabled"
 	}
 	_ = s.Store.AddEvent("info", a.Username, verb+" inbound "+in.Remark, "via=hp-ui")
+	s.Apply.Schedule()
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "enabled": !in.Enable})
 }
 

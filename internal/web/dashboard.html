@@ -152,9 +152,18 @@
      sentence it comes out as "B 0", so numbers are isolated. */
   .mono,.quota-label,.ucard-foot b,.ucard-foot span{
     direction:ltr;unicode-bidi:isolate}
-  .live{width:9px;height:9px;border-radius:50%;flex:0 0 9px;background:var(--ok)}
-  .live.off{background:var(--muted);opacity:.6}
+  .live{width:9px;height:9px;border-radius:50%;flex:0 0 9px;background:var(--ok);
+    display:inline-block;vertical-align:middle;margin-inline-end:7px}
+  .live.off{background:var(--muted);opacity:.55}
+  .live.idle{background:transparent;border:2px solid var(--muted);opacity:.65}
   .live.bad{background:var(--bad)}
+  table.det{width:100%;border-collapse:collapse;font-size:13px}
+  table.det th{text-align:start;font-weight:600;opacity:.7;padding:9px 12px 9px 0;
+    white-space:nowrap;vertical-align:top;border-bottom:1px solid var(--line)}
+  table.det td{padding:9px 0;border-bottom:1px solid var(--line);
+    word-break:break-all;direction:ltr;text-align:start}
+  body[dir="rtl"] table.det td{text-align:right}
+  table.det tr:last-child th,table.det tr:last-child td{border-bottom:0}
   @media (max-width:860px){
     .header{padding:10px 14px;gap:10px}
     .logo-text b{font-size:14px}
@@ -603,6 +612,16 @@
   </form>
 </div>
 
+<div class="backdrop" id="m-details">
+  <div class="modal">
+    <h3 id="det-title"></h3>
+    <div id="det-body"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-p" onclick="closeM('m-details')" data-i18n="close">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="backdrop" id="m-qr">
   <div class="modal">
     <h3 id="qr-title"></h3>
@@ -682,6 +701,12 @@ const I18N = {
       mg_found_here:"Panels found on this server",
       mg_found_none:"No other panel found on this server. Upload its database instead.",
       mg_or:"or point at it yourself",
+      details:"Details",online:"online",offline:"idle",never:"never",
+      just_now:"just now",min_ago:"min ago",hr_ago:"h ago",day_ago:"d ago",
+      d_state:"State",d_lastseen:"Last seen",d_usage:"Used",d_quota:"Quota",
+      d_expiry:"Expiry",d_inbound:"Inbound",d_flow:"Flow",d_noflow:"none",
+      d_iplimit:"Device limit",d_created:"Customer since",d_sub:"Subscription id",
+      d_up:"up",d_down:"down",
       qr_sub:"Subscription",qr_cfg:"This config",
       qr_why_sub:"Give this to the customer. It keeps working if a key is rotated or the inbound moves.",
       qr_why_cfg:"One server only. Use it for a quick test, or an app that cannot take a subscription.",
@@ -743,6 +768,12 @@ const I18N = {
       mg_found_here:"پنل‌هایی که روی همین سرور پیدا شد",
       mg_found_none:"پنل دیگری روی این سرور پیدا نشد. فایلش را بفرستید.",
       mg_or:"یا خودتان نشانی بدهید",
+      details:"جزئیات",online:"آنلاین",offline:"بی‌کار",never:"هرگز",
+      just_now:"همین حالا",min_ago:"دقیقه پیش",hr_ago:"ساعت پیش",day_ago:"روز پیش",
+      d_state:"وضعیت",d_lastseen:"آخرین اتصال",d_usage:"مصرف",d_quota:"سهمیه",
+      d_expiry:"انقضا",d_inbound:"ورودی",d_flow:"فلو",d_noflow:"ندارد",
+      d_iplimit:"سقف دستگاه",d_created:"مشتری از",d_sub:"نشانهٔ اشتراک",
+      d_up:"ارسال",d_down:"دریافت",
       qr_sub:"اشتراک",qr_cfg:"همین کانفیگ",
       qr_why_sub:"این را به مشتری بدهید. اگر کلید عوض شود یا ورودی جابه‌جا شود باز هم کار می‌کند.",
       qr_why_cfg:"فقط همین یک سرور. برای آزمایش سریع یا برنامه‌ای که اشتراک نمی‌پذیرد.",
@@ -878,7 +909,8 @@ function render(){
   document.getElementById('users').innerHTML = table(
     [T('c_user'),T('c_inbound'),T('c_usage'),T('c_quota'),T('c_expiry'),T('c_state'),''],
     D.users.map(u => [
-      esc(u.email), esc(u.inbound || '—'),
+      `<span class="live ${liveCls(u)}" title="${u.online?T('online'):T('offline')}"></span> ${esc(u.email)}`,
+      esc(u.inbound || '—'),
       `<span class="mono">${bytes(u.total)}</span>`,
       quotaCell(u), expiryCell(u), stateTag(u),
       `<div class="row-actions">
@@ -1391,6 +1423,7 @@ function userMenu(ev, id){
   const btn = ev.currentTarget;
   btn.dataset.mid = 'u' + id;
   openMenu(btn, [
+    {label:T('details'), fn:() => showDetails(id)},
     {label:T('qr'),     fn:() => showQR(id)},
     {label:T('edit'),   fn:() => editUser(id)},
     {label:u.enabled ? T('disable') : T('enable'), fn:() => toggleUser(id)},
@@ -1422,7 +1455,7 @@ function userCards(){
   return `<div class="cards">` + D.users.map(u => {
     const pct = u.quota ? Math.min(100, Math.round(u.total * 100 / u.quota)) : 0;
     const cls = pct >= 100 ? 'max' : (pct > 80 ? 'hot' : '');
-    const live = !u.enabled ? 'off' : ((u.expired || u.over_quota) ? 'bad' : '');
+    const live = liveCls(u);
     return `<div class="ucard">
       <div class="ucard-top">
         <span class="live ${live}"></span>
@@ -1463,6 +1496,46 @@ function inboundCards(){
         <span>${esc(i.node_name || '')}</span>
       </div>
     </div>`).join('') + `</div>`;
+}
+
+
+/* a dot that means something: green only when the core reported traffic
+   from this account in the last few minutes */
+function liveCls(u){
+  if(!u.enabled) return 'off';
+  if(u.expired || u.over_quota) return 'bad';
+  return u.online ? '' : 'idle';
+}
+function whenStr(iso){
+  if(!iso) return T('never');
+  const d = new Date(iso), mins = Math.floor((Date.now() - d) / 60000);
+  if(mins < 1)    return T('just_now');
+  if(mins < 60)   return mins + ' ' + T('min_ago');
+  if(mins < 1440) return Math.floor(mins/60) + ' ' + T('hr_ago');
+  return Math.floor(mins/1440) + ' ' + T('day_ago');
+}
+function showDetails(id){
+  const u = D.users.find(x => x.id === id);
+  if(!u) return;
+  const inb = D.inbounds.find(i => i.id === u.inbound_id) || {};
+  const rows = [
+    [T('d_state'),   u.enabled ? (u.online ? T('online') : T('offline')) : T('disabled')],
+    [T('d_lastseen'),whenStr(u.last_seen)],
+    [T('d_usage'),   `${bytes(u.total)} (${T('d_up')} ${bytes(u.up)} · ${T('d_down')} ${bytes(u.down)})`],
+    [T('d_quota'),   u.quota ? bytes(u.quota) : T('unlimited')],
+    [T('d_expiry'),  u.expire_at ? new Date(u.expire_at).toLocaleDateString() +
+                     (u.days_left !== null ? ` — ${u.days_left} ${T('days')}` : '') : T('permanent')],
+    [T('d_inbound'), `${esc(u.inbound || '—')}  ${esc(inb.protocol||'')}:${inb.port||''}`],
+    [T('d_flow'),    u.flow || T('d_noflow')],
+    [T('d_iplimit'), u.ip_limit ? u.ip_limit : T('unlimited')],
+    [T('d_created'), u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'],
+    [T('d_sub'),     u.sub_token || '—'],
+  ];
+  document.getElementById('det-title').textContent = u.email;
+  document.getElementById('det-body').innerHTML =
+    `<table class="det">${rows.map(([k,v]) =>
+      `<tr><th>${esc(k)}</th><td>${v}</td></tr>`).join('')}</table>`;
+  openM('m-details');
 }
 
 /* ── start up last, so every function and every piece of state above

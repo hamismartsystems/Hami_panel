@@ -59,7 +59,8 @@ func TestRealityConfigMatchesLinkAndDoesNotLeak(t *testing.T) {
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		t.Fatal(err)
 	}
-	if len(doc.Inbounds) != 2 {
+	// the statistics endpoint rides along as one extra inbound
+	if len(doc.Inbounds) != 3 {
 		t.Fatalf("inbounds: %d", len(doc.Inbounds))
 	}
 	got := doc.Inbounds[0]
@@ -216,5 +217,90 @@ func TestTLSWithoutCertFails(t *testing.T) {
 	}
 	if strings.Contains(links[0], "/etc/hami/a.key") || strings.Contains(links[0], "a.crt") {
 		t.Fatal("certificate path leaked into the link")
+	}
+}
+
+// Without a statistics endpoint the panel cannot count a byte of a
+// customer's traffic or tell whether anyone is connected, so quotas
+// never deplete. It must be present, and it must be on loopback.
+func TestConfigExposesStatsOnLoopbackOnly(t *testing.T) {
+	raw, err := Build([]Endpoint{{
+		Inbound: link.Inbound{
+			ID: 1, Remark: "a", Protocol: "vless", Port: 443, Host: "198.51.100.10",
+			Transport: link.TCP, Security: link.None,
+		},
+		Clients: []link.Client{{UUID: "11111111-1111-1111-1111-111111111111", Email: "x"}},
+		Listen:  "0.0.0.0", Tag: "in-1",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		API struct {
+			Tag      string   `json:"tag"`
+			Services []string `json:"services"`
+		} `json:"api"`
+		Stats  map[string]any `json:"stats"`
+		Policy struct {
+			Levels map[string]struct {
+				Up     bool `json:"statsUserUplink"`
+				Down   bool `json:"statsUserDownlink"`
+				Online bool `json:"statsUserOnline"`
+			} `json:"levels"`
+		} `json:"policy"`
+		Routing struct {
+			Rules []struct {
+				InboundTag  []string `json:"inboundTag"`
+				OutboundTag string   `json:"outboundTag"`
+			} `json:"rules"`
+		} `json:"routing"`
+		Inbounds []struct {
+			Tag    string `json:"tag"`
+			Listen string `json:"listen"`
+			Port   int    `json:"port"`
+		} `json:"inbounds"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc.Stats == nil {
+		t.Error("no stats block: nothing would ever be counted")
+	}
+	lvl := doc.Policy.Levels["0"]
+	if !lvl.Up || !lvl.Down {
+		t.Error("per-user traffic counting is off, so quotas can never deplete")
+	}
+	if !lvl.Online {
+		t.Error("per-user online counting is off, so everyone looks offline")
+	}
+	var api struct {
+		listen string
+		port   int
+		found  bool
+	}
+	for _, in := range doc.Inbounds {
+		if in.Tag == "api" {
+			api.listen, api.port, api.found = in.Listen, in.Port, true
+		}
+	}
+	if !api.found {
+		t.Fatal("no api inbound")
+	}
+	if api.listen != "127.0.0.1" {
+		t.Errorf("the stats endpoint listens on %q — it must never leave the machine", api.listen)
+	}
+	if api.port != StatsAPIPort {
+		t.Errorf("api port %d, want %d", api.port, StatsAPIPort)
+	}
+	routed := false
+	for _, r := range doc.Routing.Rules {
+		for _, tag := range r.InboundTag {
+			if tag == "api" && r.OutboundTag == "api" {
+				routed = true
+			}
+		}
+	}
+	if !routed {
+		t.Error("the api inbound is not routed to the api service, so it answers nothing")
 	}
 }

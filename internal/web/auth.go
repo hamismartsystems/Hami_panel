@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hamismartsystems/hami_panel/internal/apply"
 	"github.com/hamismartsystems/hami_panel/internal/store"
 )
 
@@ -30,6 +31,9 @@ type Server struct {
 	// BaseURL is the address customers use to fetch subscriptions. Empty
 	// means "work it out from the request".
 	BaseURL string
+	// Apply pushes changes into the running core. Nil, or one with no
+	// config path, means the panel only keeps records.
+	Apply *apply.Applier
 
 	limiter loginLimiter
 	imports importSessions

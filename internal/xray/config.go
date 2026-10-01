@@ -129,7 +129,19 @@ func Links(endpoints []Endpoint) ([]string, error) {
 
 // Build returns an Xray config whose every inbound is a projection of one
 // endpoint. It fails instead of emitting a config that cannot match its link.
+// StatsAPIPort is where the core exposes its statistics service, on
+// loopback only. Without it the panel has no way to know how much each
+// customer used or whether anyone is connected, so quotas never deplete
+// and every user looks offline forever.
+const StatsAPIPort = 10085
+
 func Build(endpoints []Endpoint) ([]byte, error) {
+	return BuildWithStats(endpoints, StatsAPIPort)
+}
+
+// BuildWithStats is Build with the statistics port spelled out, so a test
+// can run two cores at once.
+func BuildWithStats(endpoints []Endpoint, apiPort int) ([]byte, error) {
 	if len(endpoints) == 0 {
 		return nil, fmt.Errorf("no endpoints")
 	}
@@ -144,10 +156,49 @@ func Build(endpoints []Endpoint) ([]byte, error) {
 		}
 		inbounds = append(inbounds, ib)
 	}
+	// The statistics endpoint. It listens on loopback and is reachable
+	// only through the routing rule below, so nothing outside the machine
+	// can reach it.
+	if apiPort > 0 {
+		inbounds = append(inbounds, map[string]any{
+			"tag": "api", "listen": "127.0.0.1", "port": apiPort,
+			"protocol": "dokodemo-door",
+			"settings": map[string]any{"address": "127.0.0.1"},
+		})
+	}
+
 	doc := map[string]any{
-		"log":       map[string]any{"loglevel": "warning"},
-		"inbounds":  inbounds,
-		"outbounds": []any{map[string]any{"protocol": "freedom", "tag": "direct"}},
+		"log":      map[string]any{"loglevel": "warning"},
+		"inbounds": inbounds,
+		"outbounds": []any{
+			map[string]any{"protocol": "freedom", "tag": "direct"},
+			map[string]any{"protocol": "blackhole", "tag": "blocked"},
+		},
+	}
+	if apiPort > 0 {
+		doc["api"] = map[string]any{
+			"tag":      "api",
+			"services": []string{"HandlerService", "StatsService"},
+		}
+		doc["stats"] = map[string]any{}
+		doc["policy"] = map[string]any{
+			"levels": map[string]any{"0": map[string]any{
+				"statsUserUplink":   true,
+				"statsUserDownlink": true,
+				"statsUserOnline":   true,
+			}},
+			"system": map[string]any{
+				"statsInboundUplink":   true,
+				"statsInboundDownlink": true,
+			},
+		}
+		doc["routing"] = map[string]any{
+			"domainStrategy": "AsIs",
+			"rules": []any{
+				map[string]any{"type": "field",
+					"inboundTag": []string{"api"}, "outboundTag": "api"},
+			},
+		}
 	}
 	raw, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {

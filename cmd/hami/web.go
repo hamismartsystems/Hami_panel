@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
+	"github.com/hamismartsystems/hami_panel/internal/apply"
 	"github.com/hamismartsystems/hami_panel/internal/store"
 	"github.com/hamismartsystems/hami_panel/internal/subs"
 	"github.com/hamismartsystems/hami_panel/internal/web"
@@ -49,6 +51,10 @@ func webServe(args []string) int {
 	baseURL := fs.String("base-url", "", "")
 	certFile := fs.String("tls-cert", "", "")
 	keyFile := fs.String("tls-key", "", "")
+	xrayConfig := fs.String("xray-config", "",
+		"write the core's config here and reload it whenever data changes")
+	reloadCmd := fs.String("reload-cmd", "systemctl restart hami-xray",
+		"command that makes the core pick up a new config")
 	fs.SetOutput(os.Stderr)
 	if err := fs.Parse(args); err != nil || *dbPath == "" {
 		webUsage()
@@ -71,7 +77,12 @@ func webServe(args []string) int {
 	}
 
 	subSrv := &subs.Server{Store: st, BaseURL: *baseURL}
-	srv := &web.Server{Store: st, DBPath: *dbPath, Secure: tls, BaseURL: *baseURL}
+	applier := &apply.Applier{Store: st, ConfigPath: *xrayConfig}
+	if *xrayConfig != "" && *reloadCmd != "" {
+		applier.Reload = strings.Fields(*reloadCmd)
+	}
+	srv := &web.Server{Store: st, DBPath: *dbPath, Secure: tls,
+		BaseURL: *baseURL, Apply: applier}
 	webHandler := srv.Routes()
 
 	mux := http.NewServeMux()
@@ -92,6 +103,12 @@ func webServe(args []string) int {
 	fmt.Printf("  login: %s://%s/hp-ui/login\n", scheme, *addr)
 	if *baseURL != "" {
 		fmt.Printf("  sub: %s/sub/<token>\n", *baseURL)
+	}
+	if applier.Enabled() {
+		fmt.Printf("  changes are pushed to the core: %s\n", *xrayConfig)
+	} else {
+		fmt.Println("  note: -xray-config not set, so changes are recorded but " +
+			"the running core will not hear about them")
 	}
 
 	if tls {

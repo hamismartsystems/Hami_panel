@@ -13,7 +13,7 @@ var ErrNotFound = errors.New("not found")
 // clientColumns is the canonical column list for client scans.
 const clientColumns = `id, inbound_id, uuid, password, method,
 	ss_password, email, enable, total_bytes, up_bytes, down_bytes, expire_at,
-	ip_limit, speed_limit, sub_token, created_at, flow`
+	ip_limit, speed_limit, sub_token, created_at, flow, last_seen`
 
 // ClientBySubToken finds the client holding this subscription token.
 // An empty token never matches.
@@ -58,6 +58,15 @@ func (s *Store) ListAllClients() ([]Client, error) {
 }
 
 // UpdateClient writes the mutable fields of an existing client.
+// lastSeenStr keeps the empty string for "never", so the column never
+// holds a zero date that would read as 1 January year one in the UI.
+func lastSeenStr(c *Client) string {
+	if c.LastSeen == nil {
+		return ""
+	}
+	return c.LastSeen.UTC().Format(time.RFC3339)
+}
+
 func (s *Store) UpdateClient(c *Client) error {
 	if c.ID == 0 {
 		return errors.New("client id is required")
@@ -68,10 +77,10 @@ func (s *Store) UpdateClient(c *Client) error {
 	}
 	res, err := s.db.Exec(`UPDATE clients SET uuid=?, password=?, method=?,
 		ss_password=?, email=?, enable=?, total_bytes=?, up_bytes=?, down_bytes=?,
-		expire_at=?, ip_limit=?, speed_limit=?, flow=? WHERE id=?`,
+		expire_at=?, ip_limit=?, speed_limit=?, flow=?, last_seen=? WHERE id=?`,
 		c.UUID, c.Password, c.Method, c.SSPassword, c.Email, boolInt(c.Enable),
 		c.TotalBytes, c.UpBytes, c.DownBytes, expire, c.IPLimit, c.SpeedLimit,
-		c.Flow, c.ID)
+		c.Flow, lastSeenStr(c), c.ID)
 	if err != nil {
 		return err
 	}
