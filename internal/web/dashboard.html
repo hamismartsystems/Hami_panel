@@ -670,6 +670,7 @@ function applyLang(){
   document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = T(el.dataset.i18n));
   try{localStorage.setItem('hpui-lang', lang)}catch(e){}
   render();
+  mgRelang();
 }
 document.getElementById('langBtn').onclick = () => { lang = lang === 'en' ? 'fa' : 'en'; applyLang(); };
 
@@ -1015,13 +1016,11 @@ document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
   if(t.dataset.p === 'migrate') mgLoadFound();
 });
 
-applyTheme(localStorage.getItem('hpui-theme') || 'dark');
-applyLang();
-loadAll();
-setInterval(loadAll, 30000);
 
 /* ── migrate from another panel ─────────────────────────────────────── */
-let MG = null;               // the live preview: {session, expect}
+let MG = null;        // the live preview: {session, expect, data}
+let MGFOUND = null;   // panels found on this server, cached for re-render
+let MGDONE = null;    // the result of a finished import
 function mgStep(n){
   [1,2,3].forEach(i => {
     const el = document.getElementById('mg-s'+i);
@@ -1055,7 +1054,8 @@ async function mgPreview(ev){
   btn.disabled = true; btn.textContent = T('mg_looking');
   try{
     const j = await api('/api/import/preview', {method:'POST', body:fd});
-    MG = {session:j.session, expect:j.plan.new_clients};
+    MG = {session:j.session, expect:j.plan.new_clients, data:j};
+    MGDONE = null;
     mgRender(j);
     mgStep(2);
   }catch(e){ mgError(e.message); mgStep(1); }
@@ -1112,27 +1112,44 @@ async function mgApply(){
   try{
     const j = await api('/api/import/apply', {method:'POST', body:fd});
     mgStep(3);
-    let html = `<div class="mg-note good"><b>${T('mg_done')}</b><ul>` +
-      `<li>${j.created_inbounds} ${T('count_inb')} · ${j.created_clients} ${T('count_usr')}</li></ul></div>`;
-    if(j.verified) html += `<div class="mg-note good">${T('mg_verified')}</div>`;
-    if(j.backup) html += `<div class="mg-note skip"><b>${T('mg_backup')}</b><ul><li>${esc(j.backup)}</li></ul></div>`;
-    document.getElementById('mgNotes').innerHTML = html;
-    document.getElementById('mgActions').innerHTML =
-      `<button class="btn-ghost" onclick="mgReset()">${T('mg_again')}</button>`;
-    toast(T('mg_done'));
+    MGDONE = j;
     MG = null;
+    mgRenderDone();
+    toast(T('mg_done'));
     loadAll();
   }catch(e){
     mgError(e.message);
     go.disabled = false; go.textContent = T('mg_import');
   }
 }
+function mgRenderDone(){
+  const j = MGDONE;
+  if(!j) return;
+  let html = `<div class="mg-note good"><b>${T('mg_done')}</b><ul>` +
+    `<li>${j.created_inbounds} ${T('count_inb')} · ${j.created_clients} ${T('count_usr')}</li></ul></div>`;
+  if(j.verified) html += `<div class="mg-note good">${T('mg_verified')}</div>`;
+  if(j.backup) html += `<div class="mg-note skip"><b>${T('mg_backup')}</b><ul><li>${esc(j.backup)}</li></ul></div>`;
+  document.getElementById('mgNotes').innerHTML = html;
+  document.getElementById('mgActions').innerHTML =
+    `<button class="btn-ghost" onclick="mgReset()">${T('mg_again')}</button>`;
+}
+
+// Everything in the Migrate tab is drawn by hand, so switching language
+// has to redraw it; a translation that only lands on half the screen is
+// worse than none.
+function mgRelang(){
+  mgRenderFound();
+  if(MGDONE) mgRenderDone();
+  else if(MG && MG.data) mgRender(MG.data);
+}
+
 function mgReset(){
   if(MG){
     const fd = new FormData(); fd.set('session', MG.session);
     fetch('/api/import/cancel', {method:'POST', body:fd}).catch(()=>{});
     MG = null;
   }
+  MGDONE = null;
   document.getElementById('mgForm').reset();
   document.getElementById('mgKeep').checked = true;
   document.getElementById('mgResult').style.display = 'none';
@@ -1149,11 +1166,18 @@ function mgFillNodes(){
 
 
 async function mgLoadFound(){
-  const box = document.getElementById('mgFound');
-  if(!box) return;
+  if(!document.getElementById('mgFound')) return;
   try{
     const j = await api('/api/import/candidates');
-    const list = j.candidates || [];
+    MGFOUND = j.candidates || [];
+  }catch(e){ MGFOUND = []; }
+  mgRenderFound();
+}
+function mgRenderFound(){
+  const box = document.getElementById('mgFound');
+  if(!box || MGFOUND === null) return;
+  {
+    const list = MGFOUND;
     if(!list.length){
       box.innerHTML = `<div class="mg-note skip">${T('mg_found_none')}</div>` +
         `<div class="mg-or">${T('mg_or')}</div>`;
@@ -1168,7 +1192,7 @@ async function mgLoadFound(){
           <span class="who"><b>${esc(c.panel)} — ${esc(c.variant)}</b><small>${esc(c.path)}</small></span>
           <span class="cnt">${esc(n)}</span></button>`;
       }).join('') + `</div><div class="mg-or">${T('mg_or')}</div>`;
-  }catch(e){ box.innerHTML = ''; }
+  }
 }
 function mgUse(path){
   document.getElementById('mgFile').value = '';
@@ -1176,6 +1200,12 @@ function mgUse(path){
   document.getElementById('mgForm').requestSubmit();
 }
 
+/* ── start up last, so every function and every piece of state above
+      already exists by the time anything runs ── */
+applyTheme(localStorage.getItem('hpui-theme') || 'dark');
+applyLang();
+loadAll();
+setInterval(loadAll, 30000);
 </script>
 </body>
 </html>
