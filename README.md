@@ -90,7 +90,7 @@
 | **بات تلگرام و فروش** | ✅ `hami bot serve` — خرید، کیف پول، کارت‌به‌کارت با تأییدِ مدیر، تحویلِ خودکارِ کانفیگ و بارکد |
 | نقشِ فروشنده | ✅ `hami bot reseller add\|remove\|list` — نصفِ قیمتِ مشتری |
 | هشدارِ انقضا و سهمیه | ✅ `hami notice` روی تایمر |
-| API عمومی و گزارش‌های مالی | 📋 برنامه‌ریزی‌شده |
+| API عمومی و گزارش‌های مالی | ✅ انجام‌شده |
 
 نقشهٔ کامل: [docs/ROADMAP.md](docs/ROADMAP.md) · طراحی: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
