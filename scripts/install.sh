@@ -20,7 +20,19 @@ HAMI_LISTEN_ADDR=${HAMI_LISTEN_ADDR:-127.0.0.1:8080}
 HAMI_BASE_URL=${HAMI_BASE_URL:-}
 HAMI_PANEL_UNIT=${HAMI_PANEL_UNIT:-hami-panel}
 HAMI_XRAY_UNIT=${HAMI_XRAY_UNIT:-hami-xray}
+HAMI_TRAFFIC_UNIT=${HAMI_TRAFFIC_UNIT:-hami-traffic}
+HAMI_NOTICE_UNIT=${HAMI_NOTICE_UNIT:-hami-notice}
 HAMI_ENABLE_AT_BOOT=${HAMI_ENABLE_AT_BOOT:-yes}
+HAMI_TRAFFIC_TIMER=${HAMI_TRAFFIC_TIMER:-yes}
+HAMI_NOTICE_TIMER=${HAMI_NOTICE_TIMER:-yes}
+HAMI_TELEGRAM=${HAMI_TELEGRAM:-}
+# Which addresses may state who the visitor is through X-Forwarded-For.
+# The panel listens on loopback, so the reverse proxy that terminates TLS
+# is on this machine; without trusting it, every visitor would share one
+# throttle key and five bad passwords anywhere would lock the operator
+# out. "none" trusts nobody and is what to set when the panel is reached
+# directly (an SSH tunnel with nothing in front of it).
+HAMI_TRUSTED_PROXIES=${HAMI_TRUSTED_PROXIES:-127.0.0.1/8}
 XRAY_VERSION=${XRAY_VERSION:-26.3.27}
 
 case "$(uname -m)" in
@@ -43,18 +55,41 @@ LISTEN_PORT=${HAMI_LISTEN_ADDR##*:}
 (( 10#$LISTEN_PORT >= 1 && 10#$LISTEN_PORT <= 65535 )) || fail "invalid loopback port: $LISTEN_PORT"
 [[ -z "$HAMI_BASE_URL" || ( "$HAMI_BASE_URL" == https://* && "$HAMI_BASE_URL" != *[[:space:]]* ) ]] || fail "HAMI_BASE_URL must be an https:// URL without spaces"
 [[ "$HAMI_ENABLE_AT_BOOT" == yes || "$HAMI_ENABLE_AT_BOOT" == no ]] || fail "HAMI_ENABLE_AT_BOOT must be yes or no"
+for value in "$HAMI_TRAFFIC_TIMER" "$HAMI_NOTICE_TIMER"; do
+  [[ "$value" == yes || "$value" == no ]] || fail "HAMI_TRAFFIC_TIMER and HAMI_NOTICE_TIMER must be yes or no"
+done
+[[ -z "$HAMI_TELEGRAM" || "$HAMI_TELEGRAM" == *:* ]] || fail "HAMI_TELEGRAM must be BOTTOKEN:CHATID"
+
+if [[ "$HAMI_TRUSTED_PROXIES" != none ]]; then
+  python3 - "$HAMI_TRUSTED_PROXIES" <<'PY' || fail "HAMI_TRUSTED_PROXIES must be a comma-separated list of IPs/CIDRs, or the word none"
+import ipaddress, sys
+for part in sys.argv[1].split(","):
+    part = part.strip()
+    if not part:
+        continue
+    ipaddress.ip_network(part, strict=False)
+PY
+fi
 
 for value in "$HAMI_PREFIX" "$HAMI_STATE_DIR" "$HAMI_CONFIG_DIR"; do
   [[ "$value" == /* && "$value" != *[[:space:]]* ]] || fail "install paths must be absolute and contain no spaces: $value"
 done
-for unit in "$HAMI_PANEL_UNIT" "$HAMI_XRAY_UNIT"; do
+for unit in "$HAMI_PANEL_UNIT" "$HAMI_XRAY_UNIT" "$HAMI_TRAFFIC_UNIT" "$HAMI_NOTICE_UNIT"; do
   [[ "$unit" =~ ^[A-Za-z0-9_.@-]+$ ]] || fail "invalid systemd unit name: $unit"
 done
 [[ "$HAMI_PANEL_UNIT" != "$HAMI_XRAY_UNIT" ]] || fail "panel and Xray unit names must differ"
+[[ "$HAMI_TRAFFIC_UNIT" != "$HAMI_NOTICE_UNIT" ]] || fail "traffic and notice unit names must differ"
 
 PANEL_FILE="/etc/systemd/system/${HAMI_PANEL_UNIT}.service"
 XRAY_FILE="/etc/systemd/system/${HAMI_XRAY_UNIT}.service"
-[[ ! -e "$PANEL_FILE" && ! -e "$XRAY_FILE" ]] || fail "one of the target systemd units already exists; refusing to overwrite"
+TRAFFIC_FILE="/etc/systemd/system/${HAMI_TRAFFIC_UNIT}.service"
+TRAFFIC_TIMER_FILE="/etc/systemd/system/${HAMI_TRAFFIC_UNIT}.timer"
+NOTICE_FILE="/etc/systemd/system/${HAMI_NOTICE_UNIT}.service"
+NOTICE_TIMER_FILE="/etc/systemd/system/${HAMI_NOTICE_UNIT}.timer"
+for file in "$PANEL_FILE" "$XRAY_FILE" "$TRAFFIC_FILE" "$TRAFFIC_TIMER_FILE" \
+            "$NOTICE_FILE" "$NOTICE_TIMER_FILE"; do
+  [[ ! -e "$file" ]] || fail "target systemd unit already exists: $file; refusing to overwrite"
+done
 for dir in "$HAMI_PREFIX" "$HAMI_STATE_DIR" "$HAMI_CONFIG_DIR"; do
   if [[ -e "$dir" ]]; then
     [[ -d "$dir" ]] || fail "target path exists and is not a directory: $dir"
@@ -138,6 +173,10 @@ BASE_URL_ARG=""
 if [[ -n "$HAMI_BASE_URL" ]]; then
   BASE_URL_ARG="-base-url $HAMI_BASE_URL"
 fi
+PROXIES_ARG=""
+if [[ "$HAMI_TRUSTED_PROXIES" != none ]]; then
+  PROXIES_ARG="-trusted-proxies $HAMI_TRUSTED_PROXIES"
+fi
 cat >"$PANEL_FILE" <<UNIT
 [Unit]
 Description=Hami Panel
@@ -147,7 +186,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=$HAMI_STATE_DIR
-ExecStart=$HAMI_PREFIX/hami web serve -db $HAMI_STATE_DIR/panel.db -addr $HAMI_LISTEN_ADDR $BASE_URL_ARG -xray-config $HAMI_CONFIG_DIR/xray.json -reload-cmd "systemctl restart $HAMI_XRAY_UNIT.service"
+ExecStart=$HAMI_PREFIX/hami web serve -db $HAMI_STATE_DIR/panel.db -addr $HAMI_LISTEN_ADDR $BASE_URL_ARG $PROXIES_ARG -xray-config $HAMI_CONFIG_DIR/xray.json -reload-cmd "systemctl restart $HAMI_XRAY_UNIT.service"
 Restart=on-failure
 RestartSec=3
 UMask=0077
@@ -161,11 +200,112 @@ WantedBy=multi-user.target
 UNIT
 chmod 0644 "$PANEL_FILE"
 
+# The panel is complete without these, but not finished: nothing else
+# depletes a quota or ends a term, so an installation without a collector
+# looks healthy while every subscription quietly never runs out. They are
+# installed by default and can be turned off with HAMI_TRAFFIC_TIMER=no /
+# HAMI_NOTICE_TIMER=no for an operator who runs collection elsewhere.
+NOTICE_TELEGRAM_FLAG=""
+if [[ -n "$HAMI_TELEGRAM" ]]; then
+  NOTICE_TELEGRAM_FLAG="-telegram $HAMI_TELEGRAM"
+fi
+
+write_traffic_units() {
+cat >"$TRAFFIC_FILE" <<UNIT
+[Unit]
+Description=Hami: count traffic and end finished subscriptions
+After=network-online.target $HAMI_XRAY_UNIT.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Exiting 1 means "the core did not answer", which is ordinary while it
+# restarts; the detail goes to the panel's own event log and the next
+# minute simply tries again.
+SuccessExitStatus=1
+ExecStart=$HAMI_PREFIX/hami traffic collect -db $HAMI_STATE_DIR/panel.db -xray $HAMI_STATE_DIR/xray/xray -quiet -config $HAMI_CONFIG_DIR/xray.json -reload-cmd "systemctl restart $HAMI_XRAY_UNIT.service"
+UMask=0077
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=$HAMI_STATE_DIR $HAMI_CONFIG_DIR
+UNIT
+chmod 0644 "$TRAFFIC_FILE"
+cat >"$TRAFFIC_TIMER_FILE" <<UNIT
+[Unit]
+Description=Hami: collect traffic every minute
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=10s
+Unit=$HAMI_TRAFFIC_UNIT.service
+
+[Install]
+WantedBy=timers.target
+UNIT
+chmod 0644 "$TRAFFIC_TIMER_FILE"
+}
+
+write_notice_units() {
+cat >"$NOTICE_FILE" <<UNIT
+[Unit]
+Description=Hami: warn customers who are expiring or nearly out of quota
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=$HAMI_PREFIX/hami notice -db $HAMI_STATE_DIR/panel.db -days 3 -ratio 0.8 $NOTICE_TELEGRAM_FLAG
+UMask=0077
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=$HAMI_STATE_DIR
+UNIT
+chmod 0644 "$NOTICE_FILE"
+cat >"$NOTICE_TIMER_FILE" <<UNIT
+[Unit]
+Description=Hami: daily expiry and quota warnings
+
+[Timer]
+OnBootSec=5min
+OnCalendar=daily
+Persistent=true
+Unit=$HAMI_NOTICE_UNIT.service
+
+[Install]
+WantedBy=timers.target
+UNIT
+chmod 0644 "$NOTICE_TIMER_FILE"
+}
+
+TRAFFIC_TIMER_ENABLED=no
+NOTICE_TIMER_ENABLED=no
+if [[ "$HAMI_TRAFFIC_TIMER" == yes ]]; then
+  write_traffic_units
+  TRAFFIC_TIMER_ENABLED=yes
+fi
+if [[ "$HAMI_NOTICE_TIMER" == yes ]]; then
+  write_notice_units
+  NOTICE_TIMER_ENABLED=yes
+fi
+
 systemctl daemon-reload
+TIMER_UNITS=()
+[[ "$TRAFFIC_TIMER_ENABLED" == yes ]] && TIMER_UNITS+=("$HAMI_TRAFFIC_UNIT.timer")
+[[ "$NOTICE_TIMER_ENABLED" == yes ]] && TIMER_UNITS+=("$HAMI_NOTICE_UNIT.timer")
+
 if [[ "$HAMI_ENABLE_AT_BOOT" == yes ]]; then
   systemctl enable --now "$HAMI_XRAY_UNIT.service" "$HAMI_PANEL_UNIT.service"
+  if (( ${#TIMER_UNITS[@]} )); then
+    systemctl enable --now "${TIMER_UNITS[@]}"
+  fi
 else
   systemctl start "$HAMI_XRAY_UNIT.service" "$HAMI_PANEL_UNIT.service"
+  if (( ${#TIMER_UNITS[@]} )); then
+    systemctl start "${TIMER_UNITS[@]}"
+  fi
 fi
 
 HEALTH_OK=no
@@ -186,3 +326,36 @@ Database: $HAMI_STATE_DIR/panel.db
 Create the first admin (save the generated password once):
   $HAMI_PREFIX/hami admin create -db $HAMI_STATE_DIR/panel.db -user admin
 EOF
+if [[ "$HAMI_TRUSTED_PROXIES" != none ]]; then
+  cat <<EOF
+X-Forwarded-For is believed only from $HAMI_TRUSTED_PROXIES. If nothing sits in
+front of the panel (no reverse proxy, no nginx), reinstall with
+HAMI_TRUSTED_PROXIES=none so the throttle cannot be fooled by a header.
+EOF
+fi
+if [[ "$TRAFFIC_TIMER_ENABLED" == yes ]]; then
+  cat <<EOF
+Traffic counters are collected every minute ($HAMI_TRAFFIC_UNIT.timer): that is
+what makes quotas and end dates real, and what the dashboard's usage and
+online figures come from. Watch it with:
+  systemctl list-timers $HAMI_TRAFFIC_UNIT.timer
+  journalctl -u $HAMI_TRAFFIC_UNIT.service -n 50 --no-pager
+EOF
+else
+  cat <<EOF
+HAMI_TRAFFIC_TIMER=no: nothing is counting traffic or ending subscriptions.
+Run this from your own scheduler, once a minute:
+  $HAMI_PREFIX/hami traffic collect -db $HAMI_STATE_DIR/panel.db \
+      -xray $HAMI_STATE_DIR/xray/xray -config $HAMI_CONFIG_DIR/xray.json \
+      -reload-cmd "systemctl restart $HAMI_XRAY_UNIT.service"
+Without -config and -reload-cmd a switch-off stays in the database and the
+customer keeps connecting until the panel next writes the config.
+EOF
+fi
+if [[ "$NOTICE_TIMER_ENABLED" == yes && -z "$HAMI_TELEGRAM" ]]; then
+  cat <<EOF
+Warnings run daily ($HAMI_NOTICE_UNIT.timer) and are written to the panel's
+event log. Set HAMI_TELEGRAM=BOTTOKEN:CHATID and reinstall to also push them
+to a Telegram chat.
+EOF
+fi

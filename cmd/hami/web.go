@@ -42,6 +42,14 @@ Create the first operator with:
 
   -tls-cert FILE -tls-key FILE   serve https and mark the session cookie
                                  Secure; both flags go together
+  -trusted-proxies LIST          IPs/CIDRs whose X-Forwarded-For may be
+                                 believed, e.g. 127.0.0.1/8. Empty (the
+                                 default) ignores the header, so a direct
+                                 visitor cannot forge a fresh identity for
+                                 every login attempt.
+  -xray-config FILE              write the core's config here and reload it
+                                 when data changes (-reload-cmd for the
+                                 command that makes the core read it)
 `)
 }
 
@@ -57,6 +65,8 @@ func webServe(args []string) int {
 		"write the core's config here and reload it whenever data changes")
 	reloadCmd := fs.String("reload-cmd", "systemctl restart hami-xray",
 		"command that makes the core pick up a new config")
+	trustedProxies := fs.String("trusted-proxies", "",
+		"comma-separated IPs/CIDRs allowed to set X-Forwarded-For, e.g. 127.0.0.1/8; empty trusts nobody")
 	fs.SetOutput(os.Stderr)
 	if err := fs.Parse(args); err != nil || *dbPath == "" {
 		webUsage()
@@ -64,6 +74,11 @@ func webServe(args []string) int {
 	}
 	if *brand != "" {
 		link.DefaultBrand = *brand
+	}
+	proxies, err := web.ParseTrustedProxies(*trustedProxies)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "serve: %v\n", err)
+		return 2
 	}
 
 	st, err := store.Open(*dbPath)
@@ -89,6 +104,7 @@ func webServe(args []string) int {
 	}
 	srv := &web.Server{Store: st, DBPath: *dbPath, Secure: tls,
 		BaseURL: *baseURL, Apply: applier}
+	srv.SetTrustedProxies(proxies)
 	webHandler := srv.Routes()
 
 	mux := http.NewServeMux()
