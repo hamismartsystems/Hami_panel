@@ -31,32 +31,18 @@ func NewToken() string {
 
 // ActiveNow reports whether the client may use the service at time now.
 // A disabled client, an expired client, or one past its quota is inactive.
+//
+// It defers to store.Client.ActiveNow so the subscription, the core's
+// config and the traffic collector cannot drift apart on what "active"
+// means.
 func ActiveNow(c store.Client, now time.Time) bool {
-	if !c.Enable {
-		return false
-	}
-	if c.ExpireAt != nil && !now.Before(c.ExpireAt.UTC()) {
-		return false
-	}
-	if c.TotalBytes > 0 && c.UpBytes+c.DownBytes >= c.TotalBytes {
-		return false
-	}
-	return true
+	return c.ActiveNow(now)
 }
 
 // WhyInactive explains, for the status page, why service stopped.
 // Call only when ActiveNow is false.
 func WhyInactive(c store.Client, now time.Time) string {
-	if !c.Enable {
-		return "disabled"
-	}
-	if c.ExpireAt != nil && !now.Before(c.ExpireAt.UTC()) {
-		return "expired"
-	}
-	if c.TotalBytes > 0 && c.UpBytes+c.DownBytes >= c.TotalBytes {
-		return "quota exhausted"
-	}
-	return "inactive"
+	return c.WhyInactive(now)
 }
 
 // Entry is one (client, inbound) pair ready for rendering.

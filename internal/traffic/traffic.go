@@ -134,14 +134,25 @@ type Result struct {
 	AddedDn  int64
 	Online   int
 	Disabled []string
+	// Expired names the clients whose term ended during or before this
+	// round. They are switched off for the same reason a drained client
+	// is: the panel has to be the thing that decides who is served, and
+	// an expiry date that only lives in the panel does not stop a
+	// customer who saved the link months ago.
+	Expired []string
 }
 
 // Apply folds a round of samples into the database: usage is added, the
-// last-seen stamp moves for anyone who passed traffic, and a client that
-// has just crossed its quota is switched off.
+// last-seen stamp moves for anyone who passed traffic, and clients that
+// have crossed their quota or their end date are switched off.
 //
 // Switching off here is deliberate. A quota that is only displayed is not
 // a quota, and the core has no idea what a customer paid for.
+//
+// Usage is written with a targeted update, never by writing the whole row
+// back: this function runs in its own process, minutes apart from the
+// panel, and a whole-row write would roll back anything the operator
+// changed in between.
 func Apply(st *store.Store, samples []Sample, now time.Time) (Result, error) {
 	var res Result
 	clients, err := st.ListAllClients()
@@ -167,26 +178,62 @@ func Apply(st *store.Store, samples []Sample, now time.Time) (Result, error) {
 			res.Online++
 		}
 		moved := s.Up > 0 || s.Down > 0
-		if !moved && !s.Online {
-			continue
-		}
-		c.UpBytes += s.Up
-		c.DownBytes += s.Down
-		res.AddedUp += s.Up
-		res.AddedDn += s.Down
 		if moved || s.Online {
 			t := now.UTC()
 			c.LastSeen = &t
 		}
-		if err := st.UpdateClient(&c); err != nil {
+		if moved {
+			// A disabled client may still be in the running config for
+			// a moment; counting its bytes without switching it on
+			// again keeps the operator's decision final.
+			if err := st.AddUsage(c.ID, s.Up, s.Down, c.LastSeen); err != nil {
+				return res, fmt.Errorf("%s: %w", c.Email, err)
+			}
+			res.AddedUp += s.Up
+			res.AddedDn += s.Down
+		} else if s.Online {
+			if err := st.AddUsage(c.ID, 0, 0, c.LastSeen); err != nil {
+				return res, fmt.Errorf("%s: %w", c.Email, err)
+			}
+		}
+		if !c.Enable {
+			continue
+		}
+		// Re-read: the counters just written, and any edit the operator
+		// made since this round started, are what decides here.
+		fresh, err := st.GetClient(c.ID)
+		if err != nil {
 			return res, fmt.Errorf("%s: %w", c.Email, err)
 		}
-		if c.TotalBytes > 0 && c.UpBytes+c.DownBytes >= c.TotalBytes && c.Enable {
-			if err := st.SetClientEnabled(c.ID, false); err != nil {
-				return res, fmt.Errorf("%s: disabling on quota: %w", c.Email, err)
-			}
-			res.Disabled = append(res.Disabled, c.Email)
+		if fresh.ActiveNow(now) {
+			continue
 		}
+		who := strings.ToLower(strings.TrimSpace(s.Email))
+		isQuota := fresh.TotalBytes > 0 && fresh.UpBytes+fresh.DownBytes >= fresh.TotalBytes
+		if err := st.SetClientEnabled(c.ID, false); err != nil {
+			return res, fmt.Errorf("%s: disabling (%s): %w", c.Email, fresh.WhyInactive(now), err)
+		}
+		switch {
+		case isQuota:
+			res.Disabled = append(res.Disabled, who)
+		default:
+			res.Expired = append(res.Expired, who)
+		}
+	}
+
+	// A client that used nothing at all is still out of term as soon as
+	// its date passes: catch those on every round, not only on use.
+	for _, c := range clients {
+		if !c.Enable || c.ExpireAt == nil {
+			continue
+		}
+		if now.Before(c.ExpireAt.UTC()) {
+			continue
+		}
+		if err := st.SetClientEnabled(c.ID, false); err != nil {
+			return res, fmt.Errorf("%s: disabling (expired): %w", c.Email, err)
+		}
+		res.Expired = append(res.Expired, strings.ToLower(strings.TrimSpace(c.Email)))
 	}
 	return res, nil
 }
