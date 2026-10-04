@@ -10,6 +10,14 @@
 // The timestamp must be within ±60 s of the receiver's clock. The key never
 // travels on the wire. Replay within the window is possible but harmless for
 // idempotent reads; mutating endpoints must be idempotent too.
+//
+// What is signed: the timestamp, the method, the path and the body digest.
+// What is NOT signed: the query string. Today every endpoint is a read with
+// no parameters, so nothing is missed — but a parameter that changes what
+// the answer means ("?limit=", "?node=") must not be added next to this
+// signature. Either fold RawQuery into the signed message first, or the
+// parameter travels unauthenticated. And a non-idempotent endpoint needs a
+// replay guard (a nonce), not just this window.
 package agent
 
 import (

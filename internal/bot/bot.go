@@ -526,7 +526,7 @@ func (b *Bot) deliver(ctx context.Context, u *store.BotUser, o *store.Order) {
 	p, _ := PlanByKey(o.Plan)
 	// The account name ends up in the core's logs and in the customer's
 	// own app, so it carries the order rather than the buyer's chat id.
-	email := fmt.Sprintf("scorpion-%d-%s", o.ID, shortID())
+	email := fmt.Sprintf("hami-%d-%s", o.ID, shortID())
 
 	// Which inbound the account goes on. The operator can pin one; with
 	// nothing pinned the panel picks the least loaded public inbound,

@@ -88,6 +88,11 @@ func (s *Server) handleSub(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Profile-Title", profileTitle(subscriptionTitle(*c)))
 	w.Header().Set("Profile-Update-Interval", "12")
 	w.Header().Set("Profile-Web-Page-Url", s.SubURL(token)+"/status")
+	// The format follows the User-Agent unless ?format= overrides it, so a
+	// shared cache that keeps this response for one client and hands it to
+	// another must key on the agent as well — otherwise a Clash subscriber
+	// can be served the v2ray body.
+	w.Header().Add("Vary", "User-Agent")
 	// clients that get zero links must not cache an empty list for hours
 	if len(entries) == 0 {
 		w.Header().Set("Cache-Control", "no-store")
@@ -161,7 +166,7 @@ body{font-family:Tahoma,sans-serif;background:#0b1020;color:#eef2ff;max-width:42
 table{margin:14px auto;font-size:14px}td{padding:5px 10px;text-align:right}
 .url{direction:ltr;word-break:break-all;font-family:monospace;font-size:11px;background:#0e1528;border-radius:8px;padding:8px;margin-top:14px}
 </style></head><body><div class="card">
-<h2>وضعیت اشتراک Scorpion</h2>
+<h2>وضعیت اشتراک %s</h2>
 <p class="%s">%s</p>
 %s
 <table>
@@ -169,7 +174,7 @@ table{margin:14px auto;font-size:14px}td{padding:5px 10px;text-align:right}
 <tr><td>تاریخ انقضا</td><td>%s</td></tr>
 </table>
 <div class="url">%s</div>
-</div></body></html>`, cls, status, qrBlock, quotaLine, expireLine, html.EscapeString(subURL))
+</div></body></html>`, html.EscapeString(link.DefaultBrand), cls, status, qrBlock, quotaLine, expireLine, html.EscapeString(subURL))
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(page))
