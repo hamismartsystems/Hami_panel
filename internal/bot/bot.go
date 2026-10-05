@@ -254,7 +254,7 @@ func (b *Bot) askGB(ctx context.Context, u *store.BotUser, planKey string) {
 
 	expiry := "بدون انقضای زمانی"
 	if p.Days > 0 {
-		expiry = fmt.Sprintf("%d روز از لحظهٔ ساخت", p.Days)
+		expiry = fmt.Sprintf("%d روز از اولین اتصال", p.Days)
 	}
 	_ = b.api.send(ctx, u.TelegramID,
 		fmt.Sprintf("پلن %s\nهر گیگابایت %s تومان\nمدت: %s\n\n"+
@@ -542,13 +542,19 @@ func (b *Bot) deliver(ctx context.Context, u *store.BotUser, o *store.Order) {
 		inboundID = in.ID
 	}
 
-	c, err := provision.User(b.cfg.Store, provision.UserOptions{
+	opts := provision.UserOptions{
 		InboundID: inboundID,
 		Email:     email,
 		QuotaGB:   float64(o.GB),
-		Days:      p.Days,
 		IPLimit:   1,
-	})
+	}
+	if p.Days > 0 {
+		// Timed plans run from the FIRST CONNECTION, not from the
+		// moment the config is delivered — a customer who installs it
+		// next week deserves their full month.
+		opts.ActivateDays = p.Days
+	}
+	c, err := provision.User(b.cfg.Store, opts)
 	if err != nil {
 		b.deliveryFailed(ctx, u, o, err)
 		return
@@ -635,7 +641,7 @@ func (b *Bot) deliveryFailed(ctx context.Context, u *store.BotUser, o *store.Ord
 func DeliveryText(p Plan, gb int, subURL, configLink, support string) string {
 	expiry := "بدون انقضای زمانی"
 	if p.Days > 0 {
-		expiry = fmt.Sprintf("%d روز از همین حالا", p.Days)
+		expiry = fmt.Sprintf("%d روز از اولین اتصال", p.Days)
 	}
 	msg := fmt.Sprintf("سفارش شما آماده شد\n\nپلن: %s\nحجم: %d گیگابایت\nانقضا: %s\n",
 		p.Name, gb, expiry)

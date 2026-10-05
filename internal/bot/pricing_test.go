@@ -17,7 +17,7 @@ func TestTheOperatorsPrices(t *testing.T) {
 	if !ok {
 		t.Fatal("no untimed plan")
 	}
-	if monthly.PerGB != 20000 || monthly.Days != 30 {
+	if monthly.PerGB != 20000 || monthly.Days != 31 {
 		t.Errorf("monthly is %d toman per GB for %d days", monthly.PerGB, monthly.Days)
 	}
 	if forever.PerGB != 50000 || forever.Days != 0 {
@@ -241,7 +241,7 @@ func TestDeliveryTextCarriesBothLinksAndFitsACaption(t *testing.T) {
 		"#Reality-443-tg223351591-1"
 	msg := DeliveryText(p, 10, sub, cfg, "https://t.me/support")
 
-	for _, want := range []string{sub, cfg, "10 گیگابایت", "30 روز", "https://t.me/support"} {
+	for _, want := range []string{sub, cfg, "10 گیگابایت", "31 روز", "https://t.me/support"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("the delivery text is missing %q", want)
 		}

@@ -134,6 +134,9 @@ type Result struct {
 	AddedDn  int64
 	Online   int
 	Disabled []string
+	// Activated lists accounts whose subscription clock just started
+	// because this was their first connection.
+	Activated []string
 }
 
 // Apply folds a round of samples into the database: usage is added, the
@@ -169,6 +172,18 @@ func Apply(st *store.Store, samples []Sample, now time.Time) (Result, error) {
 		moved := s.Up > 0 || s.Down > 0
 		if !moved && !s.Online {
 			continue
+		}
+		// First connection of an account sold as "month from first
+		// use": stamp its expiry now, counting the advertised days from
+		// this moment. Afterwards activate_days reads zero, so this can
+		// never fire twice.
+		if c.ActivateDays > 0 && c.ExpireAt == nil {
+			t := now.UTC().Add(time.Duration(c.ActivateDays) * 24 * time.Hour)
+			c.ExpireAt = &t
+			res.Activated = append(res.Activated, c.Email)
+			c.ActivateDays = 0
+			_ = st.AddEvent("info", "traffic",
+				"subscription clock started for "+c.Email, "")
 		}
 		c.UpBytes += s.Up
 		c.DownBytes += s.Down

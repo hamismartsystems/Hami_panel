@@ -182,8 +182,14 @@ type UserOptions struct {
 	QuotaGB   float64
 	Days      int
 	ExpireAt  *time.Time
-	IPLimit   int
-	SpeedKbps int
+	// ActivateDays sells "a month that starts when the customer first
+	// connects", not when the config is delivered. When set, the
+	// account is created with no expiry and the traffic collector
+	// stamps expire_at at ActivateDays out on first use. Takes
+	// precedence over Days.
+	ActivateDays int
+	IPLimit      int
+	SpeedKbps    int
 }
 
 // User creates one client on one inbound and issues its subscription token.
@@ -210,21 +216,28 @@ func User(st *store.Store, o UserOptions) (*store.Client, error) {
 	if o.Days < 0 {
 		return nil, errors.New("duration cannot be negative")
 	}
+	if o.ActivateDays < 0 {
+		return nil, errors.New("activation duration cannot be negative")
+	}
 
 	id := o.UUID
 	if id == "" {
 		id = uuid.NewString()
 	}
 	expires := o.ExpireAt
-	if o.Days > 0 {
+	if o.Days > 0 && o.ActivateDays == 0 {
 		t := time.Now().UTC().Add(time.Duration(o.Days) * 24 * time.Hour)
 		expires = &t
+	}
+	activate := o.ActivateDays
+	if activate > 0 {
+		expires = nil // the clock starts on the customer's first connection
 	}
 
 	c := &store.Client{
 		InboundID: o.InboundID, UUID: id, Email: o.Email, Enable: true,
 		TotalBytes: GBToBytes(o.QuotaGB), IPLimit: o.IPLimit,
-		SpeedLimit: int64(o.SpeedKbps), ExpireAt: expires,
+		SpeedLimit: int64(o.SpeedKbps), ExpireAt: expires, ActivateDays: activate,
 	}
 	if err := st.CreateClient(c); err != nil {
 		return nil, err

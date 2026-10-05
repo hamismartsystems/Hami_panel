@@ -131,6 +131,12 @@ var migrations = []string{
 	`ALTER TABLE inbounds ADD COLUMN congestion_control TEXT NOT NULL DEFAULT '';`,
 	// Stage 4b: private/dedicated inbounds (admin-only)
 	`ALTER TABLE inbounds ADD COLUMN is_private INTEGER NOT NULL DEFAULT 0;`,
+	// Stage 5: first-connection activation. activate_days > 0 together
+	// with a NULL expire_at means "the clock starts the moment the
+	// customer first moves traffic or comes online"; the traffic
+	// collector then stamps expire_at and zeroes this field. Old rows
+	// all carry 0 — their expiries work exactly as before.
+	`ALTER TABLE clients ADD COLUMN activate_days INTEGER NOT NULL DEFAULT 0;`,
 	// Stage 4.5: panel operators and browser sessions for HP-UI.
 	`CREATE TABLE IF NOT EXISTS admins (
 		id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -255,10 +261,15 @@ type Client struct {
 	TotalBytes int64
 	UpBytes    int64
 	DownBytes  int64
-	ExpireAt   *time.Time
-	IPLimit    int
-	SpeedLimit int64
-	SubToken   string
+	ExpireAt *time.Time
+	// ActivateDays > 0 with ExpireAt unset means the subscription has
+	// not started yet: its clock begins on the customer's first
+	// connection, then counts ActivateDays days. Zero = normal expiry
+	// semantics (none, or already stamped at creation).
+	ActivateDays int
+	IPLimit      int
+	SpeedLimit   int64
+	SubToken     string
 	// Flow overrides the inbound's flow for this one client. Empty means
 	// "whatever the inbound says".
 	Flow string
@@ -401,11 +412,12 @@ func (s *Store) CreateClient(c *Client) error {
 	}
 	res, err := s.db.Exec(`INSERT INTO clients (inbound_id, uuid, password, method,
 		ss_password, email, enable, total_bytes, up_bytes, down_bytes, expire_at,
-		ip_limit, speed_limit, sub_token, created_at, flow)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		ip_limit, speed_limit, sub_token, created_at, flow, activate_days)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		c.InboundID, c.UUID, c.Password, c.Method, c.SSPassword, c.Email,
 		boolInt(c.Enable), c.TotalBytes, c.UpBytes, c.DownBytes, expire,
-		c.IPLimit, c.SpeedLimit, c.SubToken, c.CreatedAt.Format(time.RFC3339), c.Flow)
+		c.IPLimit, c.SpeedLimit, c.SubToken, c.CreatedAt.Format(time.RFC3339), c.Flow,
+		c.ActivateDays)
 	if err != nil {
 		return err
 	}
@@ -416,14 +428,14 @@ func (s *Store) CreateClient(c *Client) error {
 func (s *Store) GetClient(id int64) (*Client, error) {
 	return scanClient(s.db.QueryRow(`SELECT id, inbound_id, uuid, password, method,
 		ss_password, email, enable, total_bytes, up_bytes, down_bytes, expire_at,
-		ip_limit, speed_limit, sub_token, created_at, flow, last_seen
+		ip_limit, speed_limit, sub_token, created_at, flow, last_seen, activate_days
 		FROM clients WHERE id = ?`, id))
 }
 
 func (s *Store) ListClientsOf(inboundID int64) ([]Client, error) {
 	rows, err := s.db.Query(`SELECT id, inbound_id, uuid, password, method,
 		ss_password, email, enable, total_bytes, up_bytes, down_bytes, expire_at,
-		ip_limit, speed_limit, sub_token, created_at, flow, last_seen
+		ip_limit, speed_limit, sub_token, created_at, flow, last_seen, activate_days
 		FROM clients WHERE inbound_id = ? ORDER BY id`,
 		inboundID)
 	if err != nil {
@@ -479,7 +491,7 @@ func scanClient(row scanner) (*Client, error) {
 	)
 	err := row.Scan(&c.ID, &c.InboundID, &c.UUID, &c.Password, &c.Method,
 		&c.SSPassword, &c.Email, &enable, &c.TotalBytes, &c.UpBytes, &c.DownBytes,
-		&expire, &c.IPLimit, &c.SpeedLimit, &c.SubToken, &ts, &c.Flow, &seen)
+		&expire, &c.IPLimit, &c.SpeedLimit, &c.SubToken, &ts, &c.Flow, &seen, &c.ActivateDays)
 	if err != nil {
 		return nil, err
 	}

@@ -13,7 +13,7 @@ var ErrNotFound = errors.New("not found")
 // clientColumns is the canonical column list for client scans.
 const clientColumns = `id, inbound_id, uuid, password, method,
 	ss_password, email, enable, total_bytes, up_bytes, down_bytes, expire_at,
-	ip_limit, speed_limit, sub_token, created_at, flow, last_seen`
+	ip_limit, speed_limit, sub_token, created_at, flow, last_seen, activate_days`
 
 // ClientBySubToken finds the client holding this subscription token.
 // An empty token never matches.
@@ -77,10 +77,10 @@ func (s *Store) UpdateClient(c *Client) error {
 	}
 	res, err := s.db.Exec(`UPDATE clients SET uuid=?, password=?, method=?,
 		ss_password=?, email=?, enable=?, total_bytes=?, up_bytes=?, down_bytes=?,
-		expire_at=?, ip_limit=?, speed_limit=?, flow=?, last_seen=? WHERE id=?`,
+		expire_at=?, ip_limit=?, speed_limit=?, flow=?, last_seen=?, activate_days=? WHERE id=?`,
 		c.UUID, c.Password, c.Method, c.SSPassword, c.Email, boolInt(c.Enable),
 		c.TotalBytes, c.UpBytes, c.DownBytes, expire, c.IPLimit, c.SpeedLimit,
-		c.Flow, lastSeenStr(c), c.ID)
+		c.Flow, lastSeenStr(c), c.ActivateDays, c.ID)
 	if err != nil {
 		return err
 	}

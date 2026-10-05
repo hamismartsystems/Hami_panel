@@ -21,7 +21,7 @@ type Plan struct {
 // because it also expires; the untimed one costs more for the same
 // volume precisely because it does not.
 var Plans = []Plan{
-	{Key: "monthly", Name: "ماهانه", PerGB: 20000, Days: 30},
+	{Key: "monthly", Name: "ماهانه", PerGB: 20000, Days: 31},
 	{Key: "forever", Name: "زمان نامحدود", PerGB: 50000, Days: 0},
 }
 

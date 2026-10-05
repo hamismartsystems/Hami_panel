@@ -178,3 +178,83 @@ func TestIdleClientKeepsItsOldLastSeen(t *testing.T) {
 		t.Errorf("an idle round moved last-seen from %v to %v", before.LastSeen, after.LastSeen)
 	}
 }
+
+// An account sold as "month from first connection" keeps no expiry until
+// the first traffic sample — then its clock starts and runs the full
+// advertised days, and the activation fires exactly once.
+func TestFirstConnectionStartsTheClock(t *testing.T) {
+	st := openStore(t)
+	c := seedClient(t, st, "monthly-user", 10<<30)
+	c.ActivateDays = 31
+	if err := st.UpdateClient(&c); err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now()
+	// No traffic yet: nothing may be stamped.
+	if _, err := Apply(st, []Sample{}, now); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.GetClientByEmail("monthly-user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ExpireAt != nil || got.ActivateDays != 31 {
+		t.Fatalf("before first use: expire=%v activate=%d, want nil/31", got.ExpireAt, got.ActivateDays)
+	}
+
+	// First packet through the core: the clock starts now.
+	res, err := Apply(st, []Sample{{Email: "monthly-user", Up: 100, Down: 200, Online: true}}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ = st.GetClientByEmail("monthly-user")
+	if got.ExpireAt == nil {
+		t.Fatal("first connection did not stamp an expiry")
+	}
+	want := now.UTC().Add(31 * 24 * time.Hour)
+	if d := got.ExpireAt.Sub(want); d < -time.Minute || d > time.Minute {
+		t.Fatalf("expiry %v, want %v", got.ExpireAt, want)
+	}
+	if got.ActivateDays != 0 {
+		t.Fatalf("activate_days not cleared: %d", got.ActivateDays)
+	}
+	if len(res.Activated) != 1 {
+		t.Fatalf("Activated = %v, want one entry", res.Activated)
+	}
+
+	// More traffic later: the expiry must not move again and the
+	// activation must not repeat.
+	later := now.Add(3 * 24 * time.Hour)
+	res2, err := Apply(st, []Sample{{Email: "monthly-user", Up: 5000, Online: true}}, later)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got2, _ := st.GetClientByEmail("monthly-user")
+	if !got2.ExpireAt.Equal(*got.ExpireAt) {
+		t.Fatalf("expiry moved: %v -> %v", got.ExpireAt, got2.ExpireAt)
+	}
+	if len(res2.Activated) != 0 {
+		t.Fatalf("second activation happened: %v", res2.Activated)
+	}
+}
+
+// Just coming online (no bytes yet — the app opened) already counts as
+// the first connection.
+func TestOnlineWithoutBytesAlsoActivates(t *testing.T) {
+	st := openStore(t)
+	c := seedClient(t, st, "online-user", 0)
+	c.ActivateDays = 31
+	if err := st.UpdateClient(&c); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	if _, err := Apply(st, []Sample{{Email: "online-user", Online: true}}, now); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := st.GetClientByEmail("online-user")
+	if got.ExpireAt == nil || got.ActivateDays != 0 {
+		t.Fatalf("online-only sample did not activate: expire=%v activate=%d",
+			got.ExpireAt, got.ActivateDays)
+	}
+}
