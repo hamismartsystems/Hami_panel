@@ -191,6 +191,16 @@ func TestDisplayNameReadsLikeAProduct(t *testing.T) {
 			Client{Email: "tg99887766-1", QuotaBytes: 20 << 30}, "", "Scorpion-20GB-بدون‌انقضا"},
 		{"bare digits are not a name",
 			Client{Email: "223351591", Timed: true}, "", "Scorpion-نامحدود-ماهانه"},
+		{"live counters ride on the label",
+			Client{Email: "Sara", QuotaBytes: 50 << 30, Timed: true,
+				UsedBytes: 11_200 << 20, DaysLeft: 12}, "",
+			"Scorpion-Sara-50GB-ماهانه | مصرف 10.9GB | 12 روز"},
+		{"usage stays silent until there is any",
+			Client{Email: "Fresh", QuotaBytes: 10 << 30, Timed: true, DaysLeft: 31}, "",
+			"Scorpion-Fresh-10GB-ماهانه | 31 روز"},
+		{"days stay silent for untimed plans",
+			Client{Email: "Qu", QuotaBytes: 20 << 30, UsedBytes: 900 << 20}, "",
+			"Scorpion-Qu-20GB-بدون‌انقضا | مصرف 900MB"},
 	} {
 		i := in
 		i.Brand = tc.brand

@@ -90,6 +90,13 @@ type Client struct {
 	// sees; zero and false mean unlimited.
 	QuotaBytes int64
 	Timed      bool
+	// UsedBytes and DaysLeft are render-time subscription info for the
+	// label: how much of the plan is gone and how much time is left.
+	// They change at every refresh, which is exactly why they exist —
+	// apps that ignore Subscription-Userinfo still show them as plain
+	// text on the config row. DaysLeft of zero or less is not shown.
+	UsedBytes int64
+	DaysLeft  int
 }
 
 // DefaultBrand is the name customers see on their configs. It is set
@@ -124,7 +131,35 @@ func DisplayName(in Inbound, c Client) string {
 	} else {
 		parts = append(parts, "بدون‌انقضا")
 	}
-	return strings.Join(parts, "-")
+	label := strings.Join(parts, "-")
+	// Live counters as plain label text, the trick the legacy panels
+	// used: a customer whose app cannot read Subscription-Userinfo
+	// still sees spend and remaining time right under their finger.
+	var live []string
+	if c.QuotaBytes > 0 && c.UsedBytes > 0 {
+		live = append(live, "مصرف "+humanUsed(c.UsedBytes))
+	}
+	if c.DaysLeft > 0 {
+		live = append(live, fmt.Sprintf("%d روز", c.DaysLeft))
+	}
+	if len(live) > 0 {
+		label += " | " + strings.Join(live, " | ")
+	}
+	return label
+}
+
+// humanUsed renders consumed traffic compactly: GB with one decimal,
+// MB under that, so the label stays short on phones.
+func humanUsed(b int64) string {
+	const gb = 1 << 30
+	if b >= gb {
+		return fmt.Sprintf("%.1fGB", float64(b)/float64(gb))
+	}
+	const mb = 1 << 20
+	if b >= mb {
+		return fmt.Sprintf("%dMB", b/mb)
+	}
+	return fmt.Sprintf("%dKB", b>>10)
 }
 
 // customerName returns the operator-chosen part of an account name, or

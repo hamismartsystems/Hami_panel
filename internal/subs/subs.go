@@ -86,7 +86,25 @@ func LinkOf(e Entry) (string, error) {
 		// activate_days means the month is sold but has not started yet —
 		// still a timed plan, just waiting for the first connection.
 		Timed: (e.Client.ExpireAt != nil && !e.Client.ExpireAt.IsZero()) || e.Client.ActivateDays > 0,
+		// live counters printed on the label for apps that ignore the
+		// userinfo header
+		UsedBytes: e.Client.UpBytes + e.Client.DownBytes,
+		DaysLeft:  daysLeft(e.Client, time.Now()),
 	})
+}
+
+// daysLeft counts whole remaining days until expiry; anything else
+// / (untimed, expired, pending first connection) yields zero and the
+// / label simply stays quiet about time.
+func daysLeft(c store.Client, now time.Time) int {
+	if c.ExpireAt == nil || c.ExpireAt.IsZero() {
+		return 0
+	}
+	left := c.ExpireAt.Sub(now.UTC())
+	if left < 0 {
+		return 0
+	}
+	return int(left.Hours() / 24)
 }
 
 // Entries resolves the enabled inbounds of a client. Today a client lives on
