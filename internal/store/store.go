@@ -190,6 +190,8 @@ var migrations = []string{
 	// collector then stamps expire_at and zeroes this field. Old rows
 	// all carry 0 — their expiries work exactly as before.
 	`ALTER TABLE clients ADD COLUMN activate_days INTEGER NOT NULL DEFAULT 0;`,
+	`CREATE INDEX IF NOT EXISTS idx_clients_activate
+		ON clients(activate_days) WHERE activate_days > 0;`,
 }
 
 func (s *Store) migrate() error {
