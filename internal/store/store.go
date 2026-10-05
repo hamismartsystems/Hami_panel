@@ -131,12 +131,6 @@ var migrations = []string{
 	`ALTER TABLE inbounds ADD COLUMN congestion_control TEXT NOT NULL DEFAULT '';`,
 	// Stage 4b: private/dedicated inbounds (admin-only)
 	`ALTER TABLE inbounds ADD COLUMN is_private INTEGER NOT NULL DEFAULT 0;`,
-	// Stage 5: first-connection activation. activate_days > 0 together
-	// with a NULL expire_at means "the clock starts the moment the
-	// customer first moves traffic or comes online"; the traffic
-	// collector then stamps expire_at and zeroes this field. Old rows
-	// all carry 0 — their expiries work exactly as before.
-	`ALTER TABLE clients ADD COLUMN activate_days INTEGER NOT NULL DEFAULT 0;`,
 	// Stage 4.5: panel operators and browser sessions for HP-UI.
 	`CREATE TABLE IF NOT EXISTS admins (
 		id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -190,6 +184,12 @@ var migrations = []string{
 		key   TEXT PRIMARY KEY,
 		value TEXT NOT NULL
 	);`,
+	// Stage 5: first-connection activation. activate_days > 0 together
+	// with a NULL expire_at means "the clock starts the moment the
+	// customer first moves traffic or comes online"; the traffic
+	// collector then stamps expire_at and zeroes this field. Old rows
+	// all carry 0 — their expiries work exactly as before.
+	`ALTER TABLE clients ADD COLUMN activate_days INTEGER NOT NULL DEFAULT 0;`,
 }
 
 func (s *Store) migrate() error {
