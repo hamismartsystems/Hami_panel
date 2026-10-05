@@ -269,7 +269,7 @@ type Client struct {
 	TotalBytes int64
 	UpBytes    int64
 	DownBytes  int64
-	ExpireAt *time.Time
+	ExpireAt   *time.Time
 	// ActivateDays > 0 with ExpireAt unset means the subscription has
 	// not started yet: its clock begins on the customer's first
 	// connection, then counts ActivateDays days. Zero = normal expiry

@@ -139,7 +139,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	if c.ExpireAt != nil {
 		expireLine = c.ExpireAt.UTC().Format("2006-01-02")
 	} else if c.ActivateDays > 0 {
-		expireLine = "از اولین اتصال شما" 
+		expireLine = "از اولین اتصال شما"
 	}
 	status, cls := "فعّال", "ok"
 	if !active {
