@@ -189,6 +189,12 @@ var migrations = []string{
 	// customer first moves traffic or comes online"; the traffic
 	// collector then stamps expire_at and zeroes this field. Old rows
 	// all carry 0 — their expiries work exactly as before.
+	// NOTE for future migrations: this list is position/version based —
+	// live databases skip everything before PRAGMA user_version, and a
+	// deployed binary may have drifted ahead of main by one statement
+	// (ours did). New statements therefore go at the tail in an order
+	// that works even when the DB is one version AHEAD of main.
+	`CREATE INDEX IF NOT EXISTS idx_clients_last_seen ON clients(last_seen);`,
 	`ALTER TABLE clients ADD COLUMN activate_days INTEGER NOT NULL DEFAULT 0;`,
 	`CREATE INDEX IF NOT EXISTS idx_clients_activate
 		ON clients(activate_days) WHERE activate_days > 0;`,
