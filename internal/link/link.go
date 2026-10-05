@@ -188,6 +188,13 @@ func customerName(email string) string {
 	return e
 }
 
+// escRemark URL-escapes a label for the link fragment. url.QueryEscape
+// would turn every space into '+', and apps show that plus sign verbatim —
+// fragments are not form data. Convert it to %20.
+func escRemark(s string) string {
+	return strings.ReplaceAll(url.QueryEscape(s), "+", "%20")
+}
+
 // humanGB renders a quota the way a customer bought it: whole gigabytes
 // when it divides evenly, one decimal when it does not.
 func humanGB(b int64) string {
@@ -322,7 +329,7 @@ func vless(in Inbound, c Client) (string, error) {
 		Host:     fmt.Sprintf("%s:%d", hostport(in.Host), in.Port),
 		RawQuery: sortedQuery(q),
 	}
-	return u.String() + "#" + url.QueryEscape(DisplayName(in, c)), nil
+	return u.String() + "#" + escRemark(DisplayName(in, c)), nil
 }
 
 func vmess(in Inbound, c Client) (string, error) {
@@ -395,7 +402,7 @@ func trojan(in Inbound, c Client) (string, error) {
 		Host:     fmt.Sprintf("%s:%d", hostport(in.Host), in.Port),
 		RawQuery: sortedQuery(q),
 	}
-	return u.String() + "#" + url.QueryEscape(DisplayName(in, c)), nil
+	return u.String() + "#" + escRemark(DisplayName(in, c)), nil
 }
 
 func shadowsocks(in Inbound, c Client) (string, error) {
@@ -408,7 +415,7 @@ func shadowsocks(in Inbound, c Client) (string, error) {
 		User:   url.User(user),
 		Host:   fmt.Sprintf("%s:%d", hostport(in.Host), in.Port),
 	}
-	return u.String() + "#" + url.QueryEscape(DisplayName(in, c)), nil
+	return u.String() + "#" + escRemark(DisplayName(in, c)), nil
 }
 
 func hysteria2(in Inbound, c Client) (string, error) {
@@ -442,7 +449,7 @@ func hysteria2(in Inbound, c Client) (string, error) {
 		Host:     fmt.Sprintf("%s:%d", hostport(in.Host), in.Port),
 		RawQuery: sortedQuery(q),
 	}
-	return u.String() + "#" + url.QueryEscape(DisplayName(in, c)), nil
+	return u.String() + "#" + escRemark(DisplayName(in, c)), nil
 }
 
 func tuic(in Inbound, c Client) (string, error) {
@@ -468,7 +475,7 @@ func tuic(in Inbound, c Client) (string, error) {
 		Host:     fmt.Sprintf("%s:%d", hostport(in.Host), in.Port),
 		RawQuery: sortedQuery(q),
 	}
-	return u.String() + "#" + url.QueryEscape(DisplayName(in, c)), nil
+	return u.String() + "#" + escRemark(DisplayName(in, c)), nil
 }
 
 func anytls(in Inbound, c Client) (string, error) {
@@ -495,7 +502,7 @@ func anytls(in Inbound, c Client) (string, error) {
 		Path:     "/",
 		RawQuery: sortedQuery(q),
 	}
-	return u.String() + "#" + url.QueryEscape(DisplayName(in, c)), nil
+	return u.String() + "#" + escRemark(DisplayName(in, c)), nil
 }
 
 /* ── subscription ─────────────────────────────────────────────────────── */
