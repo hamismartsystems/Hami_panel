@@ -83,7 +83,9 @@ func LinkOf(e Entry) (string, error) {
 		Flow: e.Client.Flow,
 		// what the customer's app will show on the config
 		QuotaBytes: e.Client.TotalBytes,
-		Timed:      e.Client.ExpireAt != nil && !e.Client.ExpireAt.IsZero(),
+		// activate_days means the month is sold but has not started yet —
+		// still a timed plan, just waiting for the first connection.
+		Timed: (e.Client.ExpireAt != nil && !e.Client.ExpireAt.IsZero()) || e.Client.ActivateDays > 0,
 	})
 }
 

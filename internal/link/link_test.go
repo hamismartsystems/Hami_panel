@@ -177,14 +177,20 @@ func TestDisplayNameReadsLikeAProduct(t *testing.T) {
 	}{
 		{"monthly ten gigs",
 			Client{Email: "tg223351591-3", QuotaBytes: 10 << 30, Timed: true}, "", "Scorpion-10GB-ماهانه"},
-		{"untimed fifty gigs",
-			Client{Email: "HeidarGh", QuotaBytes: 50 << 30}, "", "Scorpion-50GB-بدون‌انقضا"},
+		{"untimed fifty gigs with a chosen name",
+			Client{Email: "HeidarGh", QuotaBytes: 50 << 30}, "", "Scorpion-HeidarGh-50GB-بدون‌انقضا"},
 		{"no quota at all",
-			Client{Email: "x", Timed: true}, "", "Scorpion-نامحدود-ماهانه"},
+			Client{Email: "x", Timed: true}, "", "Scorpion-x-نامحدود-ماهانه"},
 		{"half a gigabyte",
-			Client{Email: "x", QuotaBytes: 1536 << 20}, "", "Scorpion-1.5GB-بدون‌انقضا"},
+			Client{Email: "x", QuotaBytes: 1536 << 20}, "", "Scorpion-x-1.5GB-بدون‌انقضا"},
 		{"per-inbound brand wins",
-			Client{Email: "x", QuotaBytes: 10 << 30, Timed: true}, "HAMI", "HAMI-10GB-ماهانه"},
+			Client{Email: "x", QuotaBytes: 10 << 30, Timed: true}, "HAMI", "HAMI-x-10GB-ماهانه"},
+		{"bot-made bot id stays hidden",
+			Client{Email: "scorpion-1042-a9f3kx", QuotaBytes: 10 << 30, Timed: true}, "", "Scorpion-10GB-ماهانه"},
+		{"telegram chat id stays hidden",
+			Client{Email: "tg99887766-1", QuotaBytes: 20 << 30}, "", "Scorpion-20GB-بدون‌انقضا"},
+		{"bare digits are not a name",
+			Client{Email: "223351591", Timed: true}, "", "Scorpion-نامحدود-ماهانه"},
 	} {
 		i := in
 		i.Brand = tc.brand
