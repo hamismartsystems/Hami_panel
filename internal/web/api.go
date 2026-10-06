@@ -1,8 +1,10 @@
 package web
 
 import (
+	"net"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/hamismartsystems/hami_panel/internal/store"
@@ -166,6 +168,26 @@ func (s *Server) apiMe(w http.ResponseWriter, r *http.Request, a *store.Admin) {
 	})
 }
 
+// nodeLive dials each node agent address and reports live reachability,
+// because the stored status/last_seen is agent-pushed and can go stale.
+func nodeLive(status map[string]bool, nodes []store.Node) {
+	var wg sync.WaitGroup
+	for _, n := range nodes {
+		wg.Add(1)
+		go func(addr string) {
+			defer wg.Done()
+			c, err := net.DialTimeout("tcp", addr, 2*time.Second)
+			if err == nil {
+				c.Close()
+				status[addr] = true
+			} else {
+				status[addr] = false
+			}
+		}(n.Address)
+	}
+	wg.Wait()
+}
+
 func (s *Server) apiOverview(w http.ResponseWriter, r *http.Request, a *store.Admin) {
 	ins, titles, err := s.inboundViews()
 	if err != nil {
@@ -201,9 +223,11 @@ func (s *Server) apiOverview(w http.ResponseWriter, r *http.Request, a *store.Ad
 		}
 	}
 	nodes, _ := s.Store.ListNodes()
+	live := map[string]bool{}
+	nodeLive(live, nodes)
 	nodesUp := 0
 	for _, n := range nodes {
-		if n.Status == "up" {
+		if live[n.Address] {
 			nodesUp++
 		}
 	}
@@ -264,6 +288,8 @@ func (s *Server) apiNodes(w http.ResponseWriter, r *http.Request, a *store.Admin
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
+	live := map[string]bool{}
+	nodeLive(live, nodes)
 	ins, _ := s.Store.ListInbounds()
 	count := map[int64]int{}
 	for _, in := range ins {
@@ -280,6 +306,13 @@ func (s *Server) apiNodes(w http.ResponseWriter, r *http.Request, a *store.Admin
 		st := n.Status
 		if st == "" {
 			st = "unknown"
+		}
+		if on, ok := live[n.Address]; ok {
+			if on {
+				st = "up"
+			} else {
+				st = "down"
+			}
 		}
 		out = append(out, nodeView{ID: n.ID, Name: n.Name, Address: n.Address,
 			Status: st, LastSeen: last, Inbounds: count[n.ID]})
