@@ -10,6 +10,8 @@
 
 ---
 
+<div dir="rtl">
+
 ## مدلِ توزیع
 
 
@@ -127,6 +129,9 @@ ssh -L 8080:127.0.0.1:8080 root@SERVER_IP
 
 برای دسترسی دائمیِ عمومی، یک reverse proxy با TLS جلوی پنل قرار دهید یا گواهی را مستقیم به `web serve` بدهید (بخش‌های پایین همین صفحه).
 
+
+</div>
+
 ## Quick start (English)
 
 One-line install on systemd Linux — Ubuntu, Debian, CentOS, AlmaLinux or Rocky (amd64 / arm64), no Go required:
@@ -150,6 +155,9 @@ ssh -L 8080:127.0.0.1:8080 root@YOUR_SERVER   # then browse http://127.0.0.1:808
 ```
 
 For permanent public access, place a TLS reverse proxy in front or pass `-tls-cert`/`-tls-key` to `hami web serve` (see the self-hosted section below).
+
+
+<div dir="rtl">
 
 ## سیستم‌عامل‌های پشتیبانی‌شده · Supported operating systems
 
@@ -260,5 +268,7 @@ go build -o hami ./cmd/hami
 
 **GPL-3.0** — هر کسی که پنل حامی را تغییر دهد باید تغییراتش را هم باز منتشر کند.
 همینطور که ما از کارِ دیگران استفاده کردیم، دیگران هم از کارِ ما.
+
+</div>
 
 <div align="center">HAMI SMART SYSTEMS</div>
