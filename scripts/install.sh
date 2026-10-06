@@ -1,15 +1,41 @@
 #!/usr/bin/env bash
 # Install the Hami Panel binary (prebuilt from GitHub Releases, or a locally built one via HAMI_BIN) and the pinned Xray Core release.
 # The panel binds to loopback by default; use a TLS reverse proxy for remote access.
+# Supported: Ubuntu, Debian, CentOS, AlmaLinux, Rocky, Fedora (systemd; apt/dnf/yum).
 set -Eeuo pipefail
 
 fail() { echo "install: $*" >&2; exit 1; }
 
 [[ ${EUID:-$(id -u)} -eq 0 ]] || fail "run as root (sudo)"
 command -v systemctl >/dev/null || fail "systemd is required"
-command -v curl >/dev/null || fail "curl is required"
+OS_ID=""
+if [[ -r /etc/os-release ]]; then
+  OS_ID=$(. /etc/os-release; echo "${ID:-unknown}")
+fi
+PKG_MGR=""
+if command -v apt-get >/dev/null; then PKG_MGR=apt
+elif command -v dnf >/dev/null; then PKG_MGR=dnf
+elif command -v yum >/dev/null; then PKG_MGR=yum
+fi
+
+# Install missing prerequisites with the distro's own package manager.
+need_pkgs=()
+command -v curl      >/dev/null || need_pkgs+=(curl)
+command -v sha256sum >/dev/null || need_pkgs+=(coreutils)
+command -v python3   >/dev/null || need_pkgs+=(python3)
+if (( ${#need_pkgs[@]} > 0 )); then
+  [[ "${HAMI_SKIP_DEPS:-no}" != "yes" ]] || fail "missing prerequisites: ${need_pkgs[*]} (HAMI_SKIP_DEPS=yes)"
+  [[ -n "$PKG_MGR" ]] || fail "missing prerequisites (${need_pkgs[*]}) and no apt/dnf/yum was found; install them manually"
+  echo "install: distro=${OS_ID:-unknown}; installing prerequisites with $PKG_MGR: ${need_pkgs[*]}"
+  case "$PKG_MGR" in
+    apt) apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${need_pkgs[@]}" ;;
+    dnf) dnf install -y -q "${need_pkgs[@]}" ;;
+    yum) yum install -y -q "${need_pkgs[@]}" ;;
+  esac || fail "package installation failed: ${need_pkgs[*]}"
+fi
+command -v curl      >/dev/null || fail "curl is required"
 command -v sha256sum >/dev/null || fail "sha256sum is required"
-command -v python3 >/dev/null || fail "python3 is required"
+command -v python3   >/dev/null || fail "python3 is required"
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 HAMI_BIN=${HAMI_BIN:-"$SCRIPT_DIR/../hami"}

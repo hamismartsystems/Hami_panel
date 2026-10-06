@@ -84,7 +84,7 @@
 | هسته دوم sing-box (Hysteria2 / TUIC / AnyTLS) | ✅ `internal/singbox` + ۱۱ قالبِ آماده |
 | رابطِ وب HP-UI | ✅ `hami web serve` — ورود، داشبورد، دوزبانه، سه تم، بدون فایلِ بیرونی |
 | حسابِ مدیر و نشست | ✅ `hami admin` — پی‌بی‌کی‌دی‌اف‌۲، کوکیِ فقط‌اچ‌تی‌تی‌پی، کندکردنِ تلاشِ ناموفق |
-| نصابِ self-hosted برای Linux/systemd | ✅ `scripts/install.sh` — پنلِ loopback و Xray پین‌شده با checksum |
+| نصابِ self-hosted برای Linux/systemd | ✅ `scripts/install.sh` — نصب یک‌خطی با باینریٔ آماده، نصبِ خودکار پیش‌نیازها روی Ubuntu/Debian/CentOS/Alma، پنلِ loopback و Xray پین‌شده با checksum |
 | مدیریتِ اینباند و کاربر از داشبورد | ✅ ساخت و ویرایش و حذف، ساختِ دسته‌ای، بارکد و لینکِ اشتراک |
 | ویرایشِ اینباند بدون حذف و ساختِ دوباره | ✅ انجام‌شده ([d9a82ca](https://github.com/hamismartsystems/Hami_panel/commit/d9a82ca)) |
 | **مهاجرت از پنل‌های دیگر** | ✅ `hami import` — ۳ایکس‌یوآی، ایکس‌یوآی، مرزبان؛ از داشبورد هم هست |
@@ -101,7 +101,7 @@
 
 ## نصب سریع — یک خطی (پیشنهادی)
 
-روی Ubuntu/Debian با systemd (معماری amd64 یا arm64)، حتی بدون داشتن Go:
+روی Ubuntu / Debian / CentOS / AlmaLinux / Rocky (دارای systemd، معماری amd64 یا arm64) — حتی بدون داشتن Go:
 
 ```bash
 bash <(curl -Ls https://raw.githubusercontent.com/hamismartsystems/Hami_panel/main/scripts/install.sh)
@@ -126,7 +126,7 @@ ssh -L 8080:127.0.0.1:8080 root@SERVER_IP
 
 ## Quick start (English)
 
-One-line install on systemd Linux (amd64 / arm64) — no Go required:
+One-line install on systemd Linux — Ubuntu, Debian, CentOS, AlmaLinux or Rocky (amd64 / arm64), no Go required:
 
 ```bash
 bash <(curl -Ls https://raw.githubusercontent.com/hamismartsystems/Hami_panel/main/scripts/install.sh)
@@ -148,6 +148,16 @@ ssh -L 8080:127.0.0.1:8080 root@YOUR_SERVER   # then browse http://127.0.0.1:808
 
 For permanent public access, place a TLS reverse proxy in front or pass `-tls-cert`/`-tls-key` to `hami web serve` (see the self-hosted section below).
 
+## سیستم‌عامل‌های پشتیبانی‌شده · Supported operating systems
+
+| سیستم‌عامل | وضعیت | Operating system | Status |
+|---|---|---|---|
+| Ubuntu 20.04+ / Debian 11+ | ✅ پیشنهاد اصلی و تست‌شده | Ubuntu 20.04+ / Debian 11+ | ✅ primary, tested |
+| CentOS 7+ / AlmaLinux / Rocky (خانوادهٔ RHEL) | ✅ نصاب خودش پیش‌نیازها را با dnf/yum نصب می‌کند | CentOS 7+ / AlmaLinux / Rocky (RHEL family) | ✅ installer self-installs prerequisites via dnf/yum |
+| Fedora و سایر توزیع‌های systemd | ✅ مسیر فایل‌ها استاندارد است؛ در صورت نیاز پیش‌نیازها را دستی بگذارید | Fedora and other systemd distros | ✅ standard paths; install prerequisites manually if asked |
+| Windows Server | ❌ سرویس‌مدل systemd/Linux است — راه پیشنهادی: یک VM اوبونتو در Hyper-V | Windows Server | ❌ needs the systemd service model — run an Ubuntu VM in Hyper-V instead |
+| pfSense / FreeBSD | ❌ فایروال/روتر است، نه میزبان اپلیکیشن؛ پنل را روی لینوکسِ کناری نصب کنید | pfSense / FreeBSD | ❌ firewall appliance, not an app host — install the panel on a Linux machine beside it |
+
 ## نصب و استفادهٔ self-hosted
 
 نصابِ این مخزن برای Linux دارای `systemd` است و روی معماری‌های `amd64` و `arm64`، هستهٔ Xray نسخهٔ پین‌شدهٔ `26.3.27` را نصب می‌کند. دریافت Xray از انتشار رسمی GitHub با SHA-256 ثابت بررسی می‌شود. نصب‌کننده خودش پورت فایروال را باز نمی‌کند.
@@ -155,7 +165,7 @@ For permanent public access, place a TLS reverse proxy in front or pass `-tls-ce
 ### پیش‌نیازها
 
 - دسترسی `root` یا `sudo` و `systemd` فعال.
-- `curl`، `sha256sum` و `python3` روی سرور.
+- `curl`، `sha256sum` و `python3` — اگر روی سیستم نباشند، نصاب با مدیر بستهٔ توزیع (apt/dnf/yum) خودش نصبشان می‌کند.
 - Go نسخهٔ `1.27` یا جدیدتر برای ساخت باینری Hami. باینری را روی سرور مقصد بسازید یا برای همان معماری Linux بسازید.
 - ارتباط خروجی با GitHub برای دریافت آرشیو Xray.
 
