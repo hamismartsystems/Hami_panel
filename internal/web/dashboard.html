@@ -982,7 +982,7 @@ function render(){
       return [esc(n.name), `<span class="mono">${esc(n.address)}</span>`,
         `<span class="tag ${cls}">${T(n.status) || esc(n.status)}</span>`,
         `<span class="mono">${when(n.last_seen)}</span>`, n.inbounds];
-    }));
+    }) ) + nodeCards();
 
   document.getElementById('logs').innerHTML = table(
     [T('c_time'),T('c_level'),T('c_actor'),T('c_msg')],
@@ -992,7 +992,7 @@ function render(){
         `<span class="tag ${cls}">${esc(e.level)}</span>`,
         esc(e.actor||'—'), esc(e.message) +
         (e.meta ? ` <span style="opacity:.5" class="mono">${esc(e.meta)}</span>` : '')];
-    }));
+    }) ) + eventCards();
 }
 
 async function loadAll(){
@@ -1527,6 +1527,43 @@ function userCards(){
         <b>${bytes(u.total)}</b>
         <span>${u.quota ? bytes(u.quota) : T('unlimited')}</span>
       </div>
+    </div>`;
+  }).join('') + `</div>`;
+}
+
+
+function nodeCards(){
+  if(!D.nodes.length) return '';
+  return `<div class="cards">` + D.nodes.map(n => {
+    const cls = n.status === 'up' ? 'ok' : (n.status === 'down' ? 'bad' : 'warn');
+    return `<div class="ucard">
+      <div class="ucard-top">
+        <span class="live ${n.status === 'up' ? '' : 'off'}"></span>
+        <b>${esc(n.name)}</b>
+        <span class="tag ${cls}">${T(n.status) || esc(n.status)}</span>
+      </div>
+      <div class="ucard-sub">
+        <span class="mono">${esc(n.address)}</span>
+        <span class="mono">${n.last_seen ? when(n.last_seen) : ''}</span>
+      </div>
+      <div class="ucard-foot">
+        <span>${n.inbounds} ${T('count_inb')}</span><span></span>
+      </div>
+    </div>`;
+  }).join('') + `</div>`;
+}
+
+function eventCards(){
+  if(!D.events.length) return '';
+  return `<div class="cards">` + D.events.map(e => {
+    const cls = e.level === 'error' ? 'bad' : (e.level === 'warn' ? 'warn' : 'ok');
+    return `<div class="ucard">
+      <div class="ucard-top">
+        <b class="mono">${when(e.ts)}</b>
+        <span class="tag ${cls}">${esc(e.level)}</span>
+      </div>
+      <div class="ucard-sub"><span>${esc(e.actor || '—')}</span></div>
+      <div class="ucard-foot"><span>${esc(e.message)}</span><span class="mono">${esc(e.meta || '')}</span></div>
     </div>`;
   }).join('') + `</div>`;
 }
