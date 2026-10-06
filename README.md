@@ -99,6 +99,55 @@
 
 نقشهٔ کامل: [docs/ROADMAP.md](docs/ROADMAP.md) · طراحی: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
+## نصب سریع — یک خطی (پیشنهادی)
+
+روی Ubuntu/Debian با systemd (معماری amd64 یا arm64)، حتی بدون داشتن Go:
+
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/hamismartsystems/Hami_panel/main/scripts/install.sh)
+```
+
+نصاب به‌صورت خودکار باینریِ Hami را از [Releases](https://github.com/hamismartsystems/Hami_panel/releases/latest) دریافت و با SHA-256 بررسی می‌کند، سپس پنل (پیش‌فرض `127.0.0.1:8080`) و Xray نسخهٔ پین‌شده را به‌عنوان سرویس systemd نصب و فعال می‌کند.
+
+ساخت نخستین مدیر (اگر رمز ندهید، رمز قوی تولید و یک بار چاپ می‌شود):
+
+```bash
+sudo /opt/hami/hami admin create -db /var/lib/hami/panel.db -user admin
+```
+
+پنل عمداً فقط روی loopback اجرا می‌شود؛ برای باز کردن داشبورد از رایانهٔ خودتان تونل SSH بزنید:
+
+```bash
+ssh -L 8080:127.0.0.1:8080 root@SERVER_IP
+# سپس در مرورگر: http://127.0.0.1:8080/hp-ui/
+```
+
+برای دسترسی دائمیِ عمومی، یک reverse proxy با TLS جلوی پنل قرار دهید یا گواهی را مستقیم به `web serve` بدهید (بخش‌های پایین همین صفحه).
+
+## Quick start (English)
+
+One-line install on systemd Linux (amd64 / arm64) — no Go required:
+
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/hamismartsystems/Hami_panel/main/scripts/install.sh)
+```
+
+The installer downloads the prebuilt binary from [GitHub Releases](https://github.com/hamismartsystems/Hami_panel/releases/latest), verifies its SHA-256, then installs the panel (default: loopback `127.0.0.1:8080`) and a pinned Xray core as systemd services.
+
+Create your first admin (a strong password is generated and printed once when omitted):
+
+```bash
+sudo /opt/hami/hami admin create -db /var/lib/hami/panel.db -user admin
+```
+
+The panel deliberately binds to loopback only; open the dashboard through an SSH tunnel:
+
+```bash
+ssh -L 8080:127.0.0.1:8080 root@YOUR_SERVER   # then browse http://127.0.0.1:8080/hp-ui/
+```
+
+For permanent public access, place a TLS reverse proxy in front or pass `-tls-cert`/`-tls-key` to `hami web serve` (see the self-hosted section below).
+
 ## نصب و استفادهٔ self-hosted
 
 نصابِ این مخزن برای Linux دارای `systemd` است و روی معماری‌های `amd64` و `arm64`، هستهٔ Xray نسخهٔ پین‌شدهٔ `26.3.27` را نصب می‌کند. دریافت Xray از انتشار رسمی GitHub با SHA-256 ثابت بررسی می‌شود. نصب‌کننده خودش پورت فایروال را باز نمی‌کند.

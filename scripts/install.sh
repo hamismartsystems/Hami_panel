@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install a locally built Hami Panel binary and the pinned Xray Core release.
+# Install the Hami Panel binary (prebuilt from GitHub Releases, or a locally built one via HAMI_BIN) and the pinned Xray Core release.
 # The panel binds to loopback by default; use a TLS reverse proxy for remote access.
 set -Eeuo pipefail
 
@@ -35,6 +35,28 @@ case "$(uname -m)" in
   *) fail "unsupported architecture: $(uname -m) (supported: amd64, arm64)" ;;
 esac
 
+HAMI_ASSET=""
+case "$(uname -m)" in
+  x86_64|amd64)  HAMI_ASSET="hami-linux-amd64" ;;
+  aarch64|arm64) HAMI_ASSET="hami-linux-arm64" ;;
+  *) fail "no prebuilt Hami binary for architecture: $(uname -m); build with Go 1.27+ and set HAMI_BIN" ;;
+esac
+HAMI_TMP=""
+if [[ ! -x "$HAMI_BIN" ]]; then
+  # One-line mode (curl | bash or a bare clone): pull the prebuilt release binary.
+  HAMI_TMP=$(mktemp -d)
+  HAMI_REL="https://github.com/hamismartsystems/Hami_panel/releases/latest/download"
+  echo "install: no local binary found; fetching prebuilt $HAMI_ASSET from GitHub Releases"
+  curl --fail --location --retry 3 --connect-timeout 20 "$HAMI_REL/$HAMI_ASSET" -o "$HAMI_TMP/$HAMI_ASSET" \
+    || fail "could not download the prebuilt Hami binary; build it yourself (see README) and pass HAMI_BIN"
+  curl --fail --location --retry 3 --connect-timeout 20 "$HAMI_REL/checksums.txt" -o "$HAMI_TMP/checksums.txt" \
+    || fail "could not download the release checksums"
+  (cd "$HAMI_TMP" && grep -F "  $HAMI_ASSET" checksums.txt | sha256sum --check --status) \
+    || fail "Hami binary SHA-256 mismatch"
+  chmod +x "$HAMI_TMP/$HAMI_ASSET" 2>/dev/null || true
+  HAMI_BIN="$HAMI_TMP/$HAMI_ASSET"
+fi
+
 [[ "$XRAY_VERSION" == 26.3.27 ]] || fail "this installer is pinned to Xray $XRAY_VERSION only"
 [[ -x "$HAMI_BIN" ]] || fail "HAMI_BIN must point to a built, executable hami binary"
 "$HAMI_BIN" template list >/dev/null || fail "HAMI_BIN is not a working Hami binary"
@@ -66,7 +88,7 @@ done
 [[ ! -e "$HAMI_CONFIG_DIR/xray.json" ]] || fail "Xray config already exists at $HAMI_CONFIG_DIR/xray.json; refusing to overwrite"
 
 TMP_DIR=$(mktemp -d)
-trap 'rm -rf -- "$TMP_DIR"' EXIT
+trap 'rm -rf -- "$TMP_DIR"; [[ -z "${HAMI_TMP:-}" ]] || rm -rf -- "$HAMI_TMP"' EXIT
 XRAY_CANDIDATE="$TMP_DIR/xray"
 
 if [[ -n "${XRAY_BIN:-}" ]]; then
