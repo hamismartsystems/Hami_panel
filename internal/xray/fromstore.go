@@ -2,6 +2,7 @@ package xray
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/hamismartsystems/hami_panel/internal/link"
 	"github.com/hamismartsystems/hami_panel/internal/store"
@@ -10,7 +11,23 @@ import (
 // EndpointsFromStore loads enabled inbounds and their enabled clients.
 // A disabled inbound is omitted entirely, so its secrets cannot leak into
 // the config of an inbound that is actually being served.
+//
+// A client that is out of term or out of quota is omitted too. The
+// subscription already refuses to hand out its link, but a customer who
+// saved the config earlier would keep connecting: the core has no idea
+// what an expiry date is, so the only way to stop them is to leave them
+// out of the config. Dropping them here is what makes the term real.
+//
+// The decision comes from store.Client.ActiveNow — the same rule the
+// subscription and the traffic collector use — so "active" cannot mean
+// one thing on the sub page and another in the running core.
 func EndpointsFromStore(st *store.Store) ([]Endpoint, error) {
+	return endpointsAt(st, time.Now())
+}
+
+// endpointsAt is EndpointsFromStore with the clock passed in, so tests
+// can place a client before or after its expiry.
+func endpointsAt(st *store.Store, now time.Time) ([]Endpoint, error) {
 	inbounds, err := st.ListInbounds()
 	if err != nil {
 		return nil, err
@@ -26,7 +43,7 @@ func EndpointsFromStore(st *store.Store) ([]Endpoint, error) {
 		}
 		enabled := make([]link.Client, 0, len(clients))
 		for _, c := range clients {
-			if !c.Enable {
+			if !c.ActiveNow(now) {
 				continue
 			}
 			enabled = append(enabled, link.Client{

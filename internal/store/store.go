@@ -287,6 +287,40 @@ type Client struct {
 	CreatedAt time.Time
 }
 
+// ActiveNow reports whether this client may use the service at time now:
+// switched on, inside its term, and inside its quota.
+//
+// This is the one definition of "this customer should be served". The
+// subscription gate, the core's config and the traffic collector all ask
+// it, so a client cannot be active in one place and dead in another.
+func (c Client) ActiveNow(now time.Time) bool {
+	if !c.Enable {
+		return false
+	}
+	if c.ExpireAt != nil && !now.Before(c.ExpireAt.UTC()) {
+		return false
+	}
+	if c.TotalBytes > 0 && c.UpBytes+c.DownBytes >= c.TotalBytes {
+		return false
+	}
+	return true
+}
+
+// WhyInactive explains why ActiveNow is false. Call it only when it is:
+// a client that is active has no reason to explain.
+func (c Client) WhyInactive(now time.Time) string {
+	if !c.Enable {
+		return "disabled"
+	}
+	if c.ExpireAt != nil && !now.Before(c.ExpireAt.UTC()) {
+		return "expired"
+	}
+	if c.TotalBytes > 0 && c.UpBytes+c.DownBytes >= c.TotalBytes {
+		return "quota exhausted"
+	}
+	return "inactive"
+}
+
 // Event is one line of the audit log.
 type Event struct {
 	ID      int64
@@ -463,6 +497,25 @@ func (s *Store) ListClientsOf(inboundID int64) ([]Client, error) {
 
 func (s *Store) SetClientEnabled(id int64, enable bool) error {
 	_, err := s.db.Exec(`UPDATE clients SET enable = ? WHERE id = ?`, boolInt(enable), id)
+	return err
+}
+
+// AddUsage adds one round of counters to a client and stamps last-seen,
+// touching nothing else.
+//
+// It only writes the three columns it owns. The traffic collector reads
+// every client, thinks for a while, and writes back — a full-row write
+// from inside that window would quietly undo a quota or an expiry the
+// operator changed in the panel at the same moment, because the value it
+// writes back is the one it read before the change.
+func (s *Store) AddUsage(id, up, down int64, seen *time.Time) error {
+	var stamp interface{}
+	if seen != nil {
+		stamp = seen.UTC().Format(time.RFC3339)
+	}
+	_, err := s.db.Exec(`UPDATE clients SET up_bytes = up_bytes + ?,
+		down_bytes = down_bytes + ?, last_seen = COALESCE(?, last_seen)
+		WHERE id = ?`, up, down, stamp, id)
 	return err
 }
 

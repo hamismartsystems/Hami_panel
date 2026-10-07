@@ -3,6 +3,8 @@ package web
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -34,6 +36,12 @@ type Server struct {
 	// Apply pushes changes into the running core. Nil, or one with no
 	// config path, means the panel only keeps records.
 	Apply *apply.Applier
+	// TrustedProxies lists the addresses of the reverse proxies allowed
+	// to say who the visitor is through X-Forwarded-For. Empty — the
+	// safe default — means the field is ignored and the socket address
+	// is used, so a direct visitor cannot forge a fresh identity for
+	// every login attempt and walk around the throttle.
+	TrustedProxies *trustedProxies
 
 	limiter loginLimiter
 	imports importSessions
@@ -100,18 +108,106 @@ func (l *loginLimiter) reset(key string) {
 	delete(l.hits, key)
 }
 
-func clientKey(r *http.Request) string {
-	if xf := r.Header.Get("X-Forwarded-For"); xf != "" {
-		if i := strings.IndexByte(xf, ','); i > 0 {
-			return strings.TrimSpace(xf[:i])
+// trustedProxies decides whether a request's X-Forwarded-For may be
+// believed. X-Forwarded-For is nothing but a header: any visitor can set
+// it, and a throttle keyed on a value the visitor chooses is no throttle
+// at all. So it is read only when the request arrived from an address the
+// operator has explicitly named as a proxy we run.
+type trustedProxies struct {
+	nets []*net.IPNet
+}
+
+// ParseTrustedProxies reads "127.0.0.1/8,::1/128,10.0.0.0/8". A bare
+// address is treated as a single host. Empty input means "trust nobody",
+// which is the correct setting for a panel with no proxy in front.
+func ParseTrustedProxies(spec string) (*trustedProxies, error) {
+	tp := &trustedProxies{}
+	for _, part := range strings.Split(spec, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
 		}
-		return strings.TrimSpace(xf)
+		if !strings.Contains(part, "/") {
+			ip := net.ParseIP(part)
+			if ip == nil {
+				return nil, fmt.Errorf("trusted proxy %q is not an IP or CIDR", part)
+			}
+			bits := 32
+			if ip.To4() == nil {
+				bits = 128
+			}
+			part = fmt.Sprintf("%s/%d", ip.String(), bits)
+		}
+		_, ipnet, err := net.ParseCIDR(part)
+		if err != nil {
+			return nil, fmt.Errorf("trusted proxy %q: %w", part, err)
+		}
+		tp.nets = append(tp.nets, ipnet)
 	}
-	host := r.RemoteAddr
-	if i := strings.LastIndexByte(host, ':'); i > 0 {
-		host = host[:i]
+	if len(tp.nets) == 0 {
+		return nil, nil
+	}
+	return tp, nil
+}
+
+func (tp *trustedProxies) contains(ip net.IP) bool {
+	if tp == nil || ip == nil {
+		return false
+	}
+	for _, n := range tp.nets {
+		if n.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// SetTrustedProxies installs the parsed allow-list. Nil means the panel
+// sits directly on the network and no header is trusted.
+func (s *Server) SetTrustedProxies(tp *trustedProxies) { s.TrustedProxies = tp }
+
+func hostOf(remoteAddr string) string {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		return strings.TrimSpace(remoteAddr)
 	}
 	return host
+}
+
+// clientKey is the throttle key for one request: the visitor's own
+// address. Only when that address is a proxy we named ourselves does the
+// last hop in X-Forwarded-For count, taking the rightmost entry because
+// the loopback proxy appends the real peer there and a visitor can only
+// add fields to the left.
+func (s *Server) clientKey(r *http.Request) string {
+	remote := hostOf(r.RemoteAddr)
+	if s.TrustedProxies.contains(net.ParseIP(remote)) {
+		if forwarded := forwardedFor(r.Header.Values("X-Forwarded-For")); forwarded != "" {
+			return forwarded
+		}
+	}
+	return remote
+}
+
+func forwardedFor(values []string) string {
+	all := make([]string, 0, len(values))
+	for _, v := range values {
+		for _, part := range strings.Split(v, ",") {
+			if p := strings.TrimSpace(part); p != "" {
+				all = append(all, p)
+			}
+		}
+	}
+	if len(all) == 0 {
+		return ""
+	}
+	last := all[len(all)-1]
+	if net.ParseIP(last) == nil {
+		// A malformed field must not become a throttle key of the
+		// visitor's choosing.
+		return ""
+	}
+	return last
 }
 
 /* ── handlers ────────────────────────────────────────────────────────── */
@@ -123,7 +219,7 @@ type loginRequest struct {
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
-	key := clientKey(r)
+	key := s.clientKey(r)
 	if blocked, wait := s.limiter.blocked(key); blocked {
 		writeJSON(w, http.StatusTooManyRequests, map[string]any{
 			"error":       "too many attempts, try again later",

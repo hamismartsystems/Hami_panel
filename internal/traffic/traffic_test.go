@@ -179,6 +179,90 @@ func TestIdleClientKeepsItsOldLastSeen(t *testing.T) {
 	}
 }
 
+// A term that ends must end even for a customer who is not using the
+// service: an expiring account that nobody has connected to yet is
+// exactly the one an operator wants stopped on time.
+func TestExpiredClientIsSwitchedOffEvenWithNoTraffic(t *testing.T) {
+	st := openStore(t)
+	c := seedClient(t, st, "silent", 0)
+	past := time.Now().Add(-time.Hour)
+	c.ExpireAt = &past
+	if err := st.UpdateClient(&c); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := Apply(st, nil, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Expired) != 1 || res.Expired[0] != "silent" {
+		t.Errorf("expired = %v, want [silent]", res.Expired)
+	}
+	after, _ := st.GetClientByEmail("silent")
+	if after.Enable {
+		t.Error("a client whose term ended is still enabled; the date is decoration")
+	}
+}
+
+// The collector runs in its own process, minutes apart from the panel. A
+// quota the operator raised in between must not be rolled back by the
+// collector writing the row it read before the change.
+func TestCollectionDoesNotUndoAConcurrentEdit(t *testing.T) {
+	st := openStore(t)
+	c := seedClient(t, st, "sara", 1000)
+	now := time.Now()
+
+	// The collector reads its list…
+	before, err := st.GetClientByEmail("sara")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before.TotalBytes != 1000 {
+		t.Fatalf("seed quota = %d, want 1000", before.TotalBytes)
+	}
+	// …the operator raises the quota from the dashboard…
+	c.TotalBytes = 100 << 30
+	if err := st.UpdateClient(&c); err != nil {
+		t.Fatal(err)
+	}
+	// …and only now does the collector write its round back.
+	if _, err := Apply(st, []Sample{{Email: "sara", Up: 10, Down: 10}}, now); err != nil {
+		t.Fatal(err)
+	}
+
+	after, err := st.GetClientByEmail("sara")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.TotalBytes != 100<<30 {
+		t.Errorf("quota = %d after a collection; the collector wrote back a row "+
+			"it had read before the operator's change", after.TotalBytes)
+	}
+	if after.UpBytes != 10 || after.DownBytes != 10 {
+		t.Errorf("usage = %d/%d, want 10/10", after.UpBytes, after.DownBytes)
+	}
+}
+
+// A disabled client stays disabled even though the core still reports its
+// counters for a moment: counting bytes must not switch anybody back on.
+func TestCollectionNeverReEnablesADisabledClient(t *testing.T) {
+	st := openStore(t)
+	c := seedClient(t, st, "off", 0)
+	if err := st.SetClientEnabled(c.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Apply(st, []Sample{{Email: "off", Up: 5, Down: 5, Online: true}}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := st.GetClientByEmail("off")
+	if after.Enable {
+		t.Error("a collection switched a disabled client back on")
+	}
+	if after.UpBytes != 5 || after.DownBytes != 5 {
+		t.Errorf("usage = %d/%d, want the reported 5/5", after.UpBytes, after.DownBytes)
+	}
+}
+
 // An account sold as "month from first connection" keeps no expiry until
 // the first traffic sample — then its clock starts and runs the full
 // advertised days, and the activation fires exactly once.

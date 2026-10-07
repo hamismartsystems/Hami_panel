@@ -152,3 +152,13 @@ func TestHumanBytes(t *testing.T) {
 		t.Fatalf("small: %q", got)
 	}
 }
+
+// The body follows the User-Agent, so a shared cache has to be told to key
+// on it: without Vary a Clash subscriber can be handed the v2ray body.
+func TestServerSubTellsCachesItVariesByAgent(t *testing.T) {
+	srv, _, _ := testServer(t)
+	rec := doGet(t, srv, "/sub/srv-token-1213", "ClashforWindows/0.20")
+	if v := rec.Header().Get("Vary"); !strings.Contains(v, "User-Agent") {
+		t.Errorf("Vary = %q; a shared cache may serve one client's format to another", v)
+	}
+}
