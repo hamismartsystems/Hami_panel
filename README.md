@@ -4,7 +4,7 @@
 
 **A VPN/proxy management panel built for one thing above all: configs that actually work.**
 
-ساخته‌شده توسط **HAMI SMART SYSTEMS** · مجوز **GPL-3.0**
+ساخته‌شده توسط **HAMI SMART SYSTEMS** · مجوز **GPL-3.0** · [English README](README.en.md)
 
 </div>
 
