@@ -200,6 +200,20 @@ type button struct {
 	URL  string `json:"url,omitempty"`
 }
 
+func replyKeyboard(rows ...[]string) string {
+	kb := make([][]map[string]string, 0, len(rows))
+	for _, r := range rows {
+		row := make([]map[string]string, 0, len(r))
+		for _, t := range r {
+			row = append(row, map[string]string{"text": t})
+		}
+		kb = append(kb, row)
+	}
+	b, _ := json.Marshal(map[string]any{
+		"keyboard": kb, "resize_keyboard": true, "is_persistent": true})
+	return string(b)
+}
+
 func keyboard(rows ...[]button) string {
 	b, _ := json.Marshal(map[string]any{"inline_keyboard": rows})
 	return string(b)

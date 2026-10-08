@@ -30,6 +30,12 @@ type Config struct {
 	CardHolder string
 	SupportURL string
 
+	// ForceJoinChannel is a channel customers must join before the
+	// shop answers them (e.g. "@scienceandtechnology2020"). Empty
+	// disables the gate. This bot must administer the channel for the
+	// membership lookups to work.
+	ForceJoinChannel string
+
 	// InboundID is where new accounts are placed. Zero means the least
 	// loaded one, which is what the panel already does for the CLI.
 	InboundID int64
@@ -40,8 +46,10 @@ type Bot struct {
 	cfg Config
 	api *api
 
-	mu    sync.Mutex
-	draft map[int64]*draft // what each person is in the middle of
+	mu     sync.Mutex
+	draft  map[int64]*draft    // what each person is in the middle of
+	fj     map[int64]time.Time // channel members confirmed recently
+	fjWarn time.Time           // last gate failure we logged
 }
 
 // draft is a purchase being assembled, or a top-up being entered.
@@ -62,7 +70,8 @@ func New(cfg Config) (*Bot, error) {
 	if cfg.Store == nil {
 		return nil, errors.New("bot: no database")
 	}
-	return &Bot{cfg: cfg, api: newAPI(cfg.Token), draft: map[int64]*draft{}}, nil
+	return &Bot{cfg: cfg, api: newAPI(cfg.Token),
+		draft: map[int64]*draft{}, fj: map[int64]time.Time{}}, nil
 }
 
 // Run polls until the context is cancelled.
@@ -111,6 +120,9 @@ func (b *Bot) handle(ctx context.Context, u Update) {
 				fmt.Sprintf("recovered while handling an update: %v", r), "")
 		}
 	}()
+	if b.gate(ctx, u) {
+		return
+	}
 	switch {
 	case u.CallbackQuery != nil:
 		b.onCallback(ctx, u)
@@ -173,6 +185,33 @@ func (b *Bot) onMessage(ctx context.Context, u Update) {
 	case text == "/id":
 		_ = b.api.send(ctx, chat, "شناسهٔ عددی شما:\n"+fmt.Sprint(bu.TelegramID), "")
 		return
+	case text == menuBuyText:
+		b.clear(chat)
+		b.askPlan(ctx, bu)
+		return
+	case text == menuWalletText:
+		b.clear(chat)
+		b.showWallet(ctx, bu)
+		return
+	case text == menuOrdersText:
+		b.clear(chat)
+		b.showOrders(ctx, bu)
+		return
+	case text == menuTopupText:
+		b.clear(chat)
+		d := b.get(chat)
+		d.stage, d.kind = "topup", "topup"
+		_ = b.api.send(ctx, bu.TelegramID,
+			"چه مبلغی می‌خواهید شارژ کنید؟ به تومان و فقط عدد.",
+			keyboard([]button{{Text: "انصراف", Data: "home"}}))
+		return
+	case text == menuSupportText:
+		if b.cfg.SupportURL != "" {
+			_ = b.api.send(ctx, chat, "☎️ پشتیبانی: "+b.cfg.SupportURL, "")
+		} else {
+			_ = b.api.send(ctx, chat, "از همین‌جا پیام بفرستید؛ تیم پشتیبانی پاسخ می‌دهد.", "")
+		}
+		return
 	}
 
 	d := b.get(chat)
@@ -204,16 +243,14 @@ func (b *Bot) sendHome(ctx context.Context, u *store.BotUser) {
 	if u.IsReseller {
 		line += "\nنرخ شما: نصف قیمت مشتری"
 	}
-	rows := [][]button{
-		{{Text: "خرید کانفیگ", Data: "buy"}},
-		{{Text: "کیف پول", Data: "wallet"}, {Text: "سفارش‌های من", Data: "orders"}},
-	}
-	if b.cfg.SupportURL != "" {
-		rows = append(rows, []button{{Text: "پشتیبانی", URL: b.cfg.SupportURL}})
-	}
+	kb := replyKeyboard(
+		[]string{menuBuyText, menuWalletText},
+		[]string{menuOrdersText, menuTopupText},
+		[]string{menuSupportText},
+	)
 	_ = b.api.send(ctx, u.TelegramID,
-		"سلام "+firstName(u)+"\n\nبه ربات فروش خوش آمدید.\n\n"+line,
-		keyboard(rows...))
+		"سلام "+firstName(u)+"\n\nبه ربات فروش خوش آمدید. منو همیشه پایینِ چت در دسترس است 👇\n\n"+line,
+		kb)
 }
 
 func (b *Bot) askPlan(ctx context.Context, u *store.BotUser) {
@@ -661,6 +698,15 @@ func DeliveryText(p Plan, gb int, subURL, configLink, support string) string {
 // caption is rejected outright, so delivery falls back to two messages
 // rather than failing after the customer has paid.
 const telegramCaptionLimit = 1024
+
+// دکمه‌های منوی ثابت پایین چتِ مشتری (Reply Keyboard)
+const (
+	menuBuyText     = "🛒 خرید کانفیگ"
+	menuWalletText  = "💳 کیف پول"
+	menuOrdersText  = "📦 سفارش‌های من"
+	menuTopupText   = "➕ شارژ کیف پول"
+	menuSupportText = "☎️ پشتیبانی"
+)
 
 /* ── small helpers ────────────────────────────────────────────────── */
 
