@@ -38,7 +38,7 @@ func botUsage() {
 	fmt.Fprint(os.Stderr, `usage:
   hami bot serve -db panel.db -token TOKEN -admin TELEGRAM_ID [-base-url URL]
       [-card NUMBER -bank NAME -holder NAME] [-support URL] [-inbound N]
-      [-xray-config PATH --reload-cmd CMD]
+      [-xray-config PATH --reload-cmd CMD] [-force-join @channel]
   hami bot reseller add|remove|list -db panel.db [-id TELEGRAM_ID]
 `)
 }
@@ -57,6 +57,7 @@ func botServe(args []string) int {
 	inbound := fs.Int64("inbound", 0, "inbound for new accounts; 0 = least loaded")
 	xrayConfig := fs.String("xray-config", "", "")
 	reloadCmd := fs.String("reload-cmd", "systemctl restart hami-xray", "")
+	forceJoin := fs.String("force-join", os.Getenv("HAMI_FORCE_JOIN_CHANNEL"), "channel customers must join before the shop answers; empty disables")
 	fs.SetOutput(os.Stderr)
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -91,6 +92,7 @@ func botServe(args []string) int {
 		Token: *token, AdminID: *admin, Store: st, Apply: applier,
 		BaseURL: *baseURL, CardNumber: *card, CardBank: *bank,
 		CardHolder: *holder, SupportURL: *support, InboundID: *inbound,
+		ForceJoinChannel: *forceJoin,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "bot: %v\n", err)

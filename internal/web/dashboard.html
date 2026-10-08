@@ -156,6 +156,9 @@
     direction:ltr;unicode-bidi:isolate}
   .live{width:9px;height:9px;border-radius:50%;flex:0 0 9px;background:var(--ok);
     display:inline-block;vertical-align:middle;margin-inline-end:7px}
+  .rates{font:12px/1.5 ui-monospace,"JetBrains Mono",Consolas,monospace;opacity:.9;margin-top:3px}
+  .rates .up{color:#cfe9ff}
+  .rates .dn{color:#59b0ff}
   .live.off{background:var(--muted);opacity:.55}
   .live.idle{background:transparent;border:2px solid var(--muted);opacity:.65}
   .live.bad{background:var(--bad)}
@@ -960,20 +963,7 @@ function render(){
   document.getElementById('inb-count').textContent =
     `${D.inbounds.length} ${T('count_inb')}`;
 
-  document.getElementById('users').innerHTML = table(
-    [T('c_user'),T('c_inbound'),T('c_usage'),T('c_quota'),T('c_expiry'),T('c_state'),''],
-    D.users.map(u => [
-      `<span class="live ${liveCls(u)}" title="${u.online?T('online'):T('offline')}"></span> ${esc(u.email)}`,
-      esc(u.inbound || '—'),
-      `<span class="mono">${bytes(u.total)}</span>`,
-      quotaCell(u), expiryCell(u), stateTag(u),
-      `<div class="row-actions">
-         <button class="kebab" aria-label="actions"
-           onclick="userMenu(event,${u.id})">\u22EE</button>
-       </div>`
-    ]) ) + userCards();
-  document.getElementById('usr-count').textContent =
-    `${D.users.length} ${T('count_usr')}`;
+  renderUsers();
 
   document.getElementById('nodes').innerHTML = table(
     [T('c_name'),T('c_addr'),T('c_state'),T('c_seen'),T('c_clients')],
@@ -1505,6 +1495,29 @@ function inboundMenu(ev, id){
 /* ── card lists for narrow screens ───────────────────────────────────
    A six-column table on a phone is a table nobody can read, so the same
    data is also laid out as cards and CSS picks one. */
+/* live up/down speeds, like the B/s line other panels draw under a name */
+function rateLine(u){
+  const up = u.up_rate || 0, dn = u.down_rate || 0;
+  if(!up && !dn) return '';
+  return `<div class="rates"><span class="up">↑ ${bytes(up)}/s</span> · <span class="dn">↓ ${bytes(dn)}/s</span></div>`;
+}
+function renderUsers(){
+  document.getElementById('users').innerHTML = table(
+    [T('c_user'),T('c_inbound'),T('c_usage'),T('c_quota'),T('c_expiry'),T('c_state'),''],
+    D.users.map(u => [
+      `<span class="live ${liveCls(u)}" title="${u.online?T('online'):T('offline')}"></span> ${esc(u.email)}`,
+      esc(u.inbound || '—'),
+      `<span class="mono">${bytes(u.total)}</span>${rateLine(u)}`,
+      quotaCell(u), expiryCell(u), stateTag(u),
+      `<div class="row-actions">
+         <button class="kebab" aria-label="actions"
+           onclick="userMenu(event,${u.id})">\u22EE</button>
+       </div>`
+    ]) ) + userCards();
+  document.getElementById('usr-count').textContent =
+    `${D.users.length} ${T('count_usr')}`;
+}
+
 function userCards(){
   if(!D.users.length) return '';
   return `<div class="cards">` + D.users.map(u => {
@@ -1523,6 +1536,7 @@ function userCards(){
         ${expiryCell(u)} ${stateTag(u)}
       </div>
       ${u.quota ? `<div class="bar"><i class="${cls}" style="width:${pct}%"></i></div>` : ''}
+      ${rateLine(u)}
       <div class="ucard-foot">
         <b>${bytes(u.total)}</b>
         <span>${u.quota ? bytes(u.quota) : T('unlimited')}</span>
@@ -1683,6 +1697,25 @@ async function submitInboundEdit(ev){
 HPUI.start({onLang: translatePage});
 loadAll();
 setInterval(loadAll, 30000);
+
+/* speeds are sampled on the server every 3s; redraw just the user rows
+   so the numbers move without kicking the rest of the dashboard around */
+let _ratesBusy = false;
+async function refreshUserRates(){
+  if(_ratesBusy) return;
+  if(!document.querySelector('.tab[data-p="users"].on')) return;
+  _ratesBusy = true;
+  try{
+    const us = await api('/api/users');
+    D.users = us.users || [];
+    const sc = document.getElementById('users');
+    const pos = sc ? sc.scrollTop : 0;
+    renderUsers();
+    if(sc) sc.scrollTop = pos;
+  }catch(e){}
+  _ratesBusy = false;
+}
+setInterval(refreshUserRates, 4000);
 </script>
 </body>
 </html>

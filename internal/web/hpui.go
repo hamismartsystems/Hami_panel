@@ -134,6 +134,13 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/import/apply", s.requireAdmin(s.apiImportApply))
 	mux.HandleFunc("POST /api/import/cancel", s.requireAdmin(s.apiImportCancel))
 
+	// Live speeds next to the minute collector. Zero-cost when the core's
+	// binary cannot be found: every rate simply stays at zero.
+	if s.live == nil {
+		s.live = newLiveSampler(findXrayBin(), liveAPIAddr())
+		s.live.start()
+	}
+
 	return securityHeaders(mux)
 }
 

@@ -43,6 +43,10 @@ type Server struct {
 	// every login attempt and walk around the throttle.
 	TrustedProxies *trustedProxies
 
+	// live drives the per-user speed readout. Nil disables it: the panel
+	// still works, the rates just stay at zero.
+	live *liveSampler
+
 	limiter loginLimiter
 	imports importSessions
 }

@@ -56,6 +56,10 @@ type userView struct {
 	// recently" rather than "connected this instant".
 	Online    bool   `json:"online"`
 	LastSeen  string `json:"last_seen"`
+	// Live speeds, bytes/sec, from the sampler watching the core's own
+	// counters; zero when idle or the sampler is off.
+	UpRate    int64  `json:"up_rate"`
+	DownRate  int64  `json:"down_rate"`
 	Flow      string `json:"flow"`
 	IPLimit   int    `json:"ip_limit"`
 	CreatedAt string `json:"created_at"`
@@ -278,6 +282,11 @@ func (s *Server) apiUsers(w http.ResponseWriter, r *http.Request, a *store.Admin
 	out := make([]userView, 0, len(clients))
 	for _, c := range clients {
 		out = append(out, userViewOf(c, titles[c.InboundID], now))
+	}
+	if s.live != nil {
+		for i := range out {
+			out[i].UpRate, out[i].DownRate = s.live.rates(out[i].Email)
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"users": out})
 }
