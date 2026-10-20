@@ -309,6 +309,9 @@ func TestSecurityHeadersArePresent(t *testing.T) {
 	if !strings.Contains(rec.Header().Get("Content-Security-Policy"), "default-src 'none'") {
 		t.Error("a content security policy should be set")
 	}
+	if csp := rec.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "manifest-src 'self'") || !strings.Contains(csp, "worker-src 'self'") {
+		t.Error("csp must allow the app manifest and service worker from self")
+	}
 }
 
 func TestUserViewFlagsExpiryAndQuota(t *testing.T) {

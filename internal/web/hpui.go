@@ -79,6 +79,7 @@ func HandlerWithDB(st *store.Store, dbPath string) http.Handler {
 // Routes builds the mux for a configured Server (lets callers set Secure).
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
+	registerPWARoutes(mux)
 
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
@@ -159,7 +160,7 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Frame-Options", "SAMEORIGIN")
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("Content-Security-Policy",
-			"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; "+
+			"default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; manifest-src 'self'; worker-src 'self'; "+
 				"img-src 'self' data:; connect-src 'self'; form-action 'self'; frame-ancestors 'self'")
 		next.ServeHTTP(w, r)
 	})
