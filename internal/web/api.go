@@ -176,17 +176,19 @@ func (s *Server) apiMe(w http.ResponseWriter, r *http.Request, a *store.Admin) {
 // because the stored status/last_seen is agent-pushed and can go stale.
 func nodeLive(status map[string]bool, nodes []store.Node) {
 	var wg sync.WaitGroup
+	var mu sync.Mutex // guards status: goroutines write the shared map concurrently
 	for _, n := range nodes {
 		wg.Add(1)
 		go func(addr string) {
 			defer wg.Done()
 			c, err := net.DialTimeout("tcp", addr, 2*time.Second)
-			if err == nil {
+			ok := err == nil
+			if ok {
 				c.Close()
-				status[addr] = true
-			} else {
-				status[addr] = false
 			}
+			mu.Lock()
+			status[addr] = ok
+			mu.Unlock()
 		}(n.Address)
 	}
 	wg.Wait()
