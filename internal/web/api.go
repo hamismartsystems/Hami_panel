@@ -149,9 +149,10 @@ func userViewOf(c store.Client, inboundName string, now time.Time) userView {
 	}
 	if c.ExpireAt != nil && !c.ExpireAt.IsZero() {
 		v.ExpireAt = c.ExpireAt.UTC().Format(time.RFC3339)
-		d := int(c.ExpireAt.Sub(now).Hours() / 24)
-		if d < 0 {
-			d = 0
+		// Round up: a 31-day term must read 31 on day one, not 30.
+		d := 0
+		if left := c.ExpireAt.Sub(now); left > 0 {
+			d = int((left + 24*time.Hour - 1) / (24 * time.Hour))
 		}
 		v.DaysLeft = &d
 		v.Expired = now.After(*c.ExpireAt)

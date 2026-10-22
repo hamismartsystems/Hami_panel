@@ -87,10 +87,11 @@ func daysLeft(c store.Client, now time.Time) int {
 		return 0
 	}
 	left := c.ExpireAt.Sub(now.UTC())
-	if left < 0 {
+	if left <= 0 {
 		return 0
 	}
-	return int(left.Hours() / 24)
+	// Round up: a 31-day term must read 31 on day one, not 30.
+	return int((left + 24*time.Hour - 1) / (24 * time.Hour))
 }
 
 // Entries resolves the enabled inbounds of a client. Today a client lives on
