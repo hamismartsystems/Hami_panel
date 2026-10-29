@@ -99,6 +99,10 @@ func TestSignatureCoversBody(t *testing.T) {
 func itoa(v int64) string { return strconv.FormatInt(v, 10) }
 
 func TestHealthEndpointRoundTrip(t *testing.T) {
+	// The host load of the machine running the tests must not decide the status.
+	sampleLoad = func() float64 { return 0 }
+	sampleMem = func() float64 { return 0 }
+	t.Cleanup(func() { sampleLoad = readLoadAvg1; sampleMem = readMemRatio })
 	now := time.Now()
 	agentSrv := &Server{NodeName: testNode, APIKey: testKey, Now: func() time.Time { return now }}
 	srv := httptest.NewServer(agentSrv.Handler())
