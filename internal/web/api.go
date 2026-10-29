@@ -54,8 +54,8 @@ type userView struct {
 	// Online is derived from the last byte seen, not from a live socket:
 	// the core reports usage on an interval, so this is "active very
 	// recently" rather than "connected this instant".
-	Online    bool   `json:"online"`
-	LastSeen  string `json:"last_seen"`
+	Online   bool   `json:"online"`
+	LastSeen string `json:"last_seen"`
 	// Live speeds, bytes/sec, from the sampler watching the core's own
 	// counters; zero when idle or the sampler is off.
 	UpRate    int64  `json:"up_rate"`
