@@ -49,11 +49,18 @@ type Health struct {
 
 var startedAt = time.Now()
 
+// sampleLoad and sampleMem read the host; tests replace them so the result
+// does not depend on how busy the machine running them is.
+var (
+	sampleLoad = readLoadAvg1
+	sampleMem  = readMemRatio
+)
+
 // ReadHealth samples minimal host health from /proc (Linux).
 func ReadHealth() Health {
 	h := Health{OK: true, Uptime: int64(time.Since(startedAt).Seconds())}
-	h.Load1 = readLoadAvg1()
-	h.MemUse = readMemRatio()
+	h.Load1 = sampleLoad()
+	h.MemUse = sampleMem()
 	return h
 }
 
