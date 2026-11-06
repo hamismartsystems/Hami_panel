@@ -9,9 +9,10 @@ import (
 )
 
 // Force-join gate: before a customer can use the shop they must be a
-// member of ForceJoinChannel. The check needs this bot to be an
-// administrator of that channel; until it is, every lookup fails and the
-// gate deliberately fails open so the shop keeps working.
+// member of every channel listed in ForceJoinChannel (comma-separated).
+// The check needs this bot to be an administrator of each channel; until
+// it is, every lookup fails and the gate deliberately fails open so the
+// shop keeps working.
 
 const (
 	joinCallback  = "fj:check"
@@ -19,10 +20,29 @@ const (
 	joinWarnEvery = time.Hour
 )
 
+// joinChannels splits the configured list ("@a, @b") into channel
+// usernames. Empty items and duplicates are dropped; order is kept.
+func joinChannels(s string) []string {
+	var out []string
+	seen := map[string]bool{}
+	parts := strings.FieldsFunc(s, func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\n' || r == '\t'
+	})
+	for _, part := range parts {
+		c := strings.TrimSpace(part)
+		if c == "" || seen[c] {
+			continue
+		}
+		seen[c] = true
+		out = append(out, c)
+	}
+	return out
+}
+
 // gate returns true when the update was consumed — either a non-member
 // got the join prompt, or the "I joined" callback was answered.
 func (b *Bot) gate(ctx context.Context, u Update) bool {
-	if strings.TrimSpace(b.cfg.ForceJoinChannel) == "" {
+	if len(joinChannels(b.cfg.ForceJoinChannel)) == 0 {
 		return false
 	}
 	var from *User
@@ -69,7 +89,7 @@ func (b *Bot) isMember(ctx context.Context, uid int64) bool {
 	}
 	b.mu.Unlock()
 
-	ok, err := b.memberNow(ctx, uid)
+	ok, err := b.memberAll(ctx, uid)
 	if err != nil {
 		b.joinWarn(err)
 		return true // fail open
@@ -85,9 +105,32 @@ func (b *Bot) isMember(ctx context.Context, uid int64) bool {
 	return ok
 }
 
-func (b *Bot) memberNow(ctx context.Context, uid int64) (bool, error) {
+// memberLookup reports whether uid is a member of one channel.
+type memberLookup func(ctx context.Context, channel string, uid int64) (bool, error)
+
+// memberAllWith returns true only when uid is a member of every channel.
+// The first lookup error stops the check and is returned.
+func memberAllWith(ctx context.Context, channels []string, uid int64, lookup memberLookup) (bool, error) {
+	for _, ch := range channels {
+		ok, err := lookup(ctx, ch, uid)
+		if err != nil {
+			return false, err
+		}
+		if !ok {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+// memberAll checks every configured channel for uid.
+func (b *Bot) memberAll(ctx context.Context, uid int64) (bool, error) {
+	return memberAllWith(ctx, joinChannels(b.cfg.ForceJoinChannel), uid, b.memberIn)
+}
+
+func (b *Bot) memberIn(ctx context.Context, channel string, uid int64) (bool, error) {
 	v := url.Values{}
-	v.Set("chat_id", b.cfg.ForceJoinChannel)
+	v.Set("chat_id", channel)
 	v.Set("user_id", fmt.Sprint(uid))
 	var m struct {
 		Status   string `json:"status"`
@@ -107,23 +150,31 @@ func (b *Bot) memberNow(ctx context.Context, uid int64) (bool, error) {
 }
 
 func (b *Bot) askJoin(ctx context.Context, chat int64) {
-	text := "🔒 برای استفاده از ربات، اول باید عضو کانال علم و فناوری ما بشی:\n\n" +
-		"📡 " + b.cfg.ForceJoinChannel + "\n\n" +
-		"بعد از عضویت دکمهٔ «عضو شدم ✅» را بزن."
-	_ = b.api.send(ctx, chat, text, keyboard(
-		[]button{{Text: "📡 عضویت در کانال", URL: "https://t.me/" + strings.TrimPrefix(b.cfg.ForceJoinChannel, "@")}},
-		[]button{{Text: "عضو شدم ✅", Data: joinCallback}},
-	))
+	channels := joinChannels(b.cfg.ForceJoinChannel)
+	names := make([]string, 0, len(channels))
+	rows := make([][]button, 0, len(channels)+1)
+	for _, ch := range channels {
+		names = append(names, "📡 "+ch)
+		rows = append(rows, []button{{
+			Text: "📡 عضویت در " + ch,
+			URL:  "https://t.me/" + strings.TrimPrefix(ch, "@"),
+		}})
+	}
+	rows = append(rows, []button{{Text: "عضو شدم ✅", Data: joinCallback}})
+	text := "🔒 برای استفاده از ربات، اول باید عضو این کانال‌ها بشی: " +
+		strings.Join(names, " و ") +
+		" — بعد از عضویت دکمهٔ «عضو شدم ✅» را بزن."
+	_ = b.api.send(ctx, chat, text, keyboard(rows...))
 }
 
 func (b *Bot) onJoinCheck(ctx context.Context, cbID string, from *User, chat int64) {
-	ok, err := b.memberNow(ctx, from.ID)
+	ok, err := b.memberAll(ctx, from.ID)
 	if err != nil {
 		b.joinWarn(err)
 		ok = true // fail open, consistent with the cached path
 	}
 	if !ok {
-		_ = b.api.answer(ctx, cbID, "هنوز عضو کانال نیستی — اول عضو شو بعد دوباره بزن 🙏")
+		_ = b.api.answer(ctx, cbID, "هنوز عضو همهٔ کانال‌ها نیستی — اول عضو شو بعد دوباره بزن 🙏")
 		b.askJoin(ctx, chat)
 		return
 	}
