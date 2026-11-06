@@ -88,7 +88,16 @@ func trafficCmd(args []string) int {
 	// It runs on the rounds that changed something and stays out of the
 	// way the rest of the time: a restart every minute would drop every
 	// live connection every minute.
-	if len(res.Disabled)+len(res.Expired) > 0 && (*configPath != "" || *reloadCmd != "") {
+	drift := false
+	if *configPath != "" {
+		if d, why, err := coreDrift(st, *configPath); err != nil {
+			fmt.Fprintf(os.Stderr, "drift check: %v\n", err)
+		} else if d {
+			drift = true
+			_ = st.AddEvent("warn", "traffic", "core config out of step with the panel; rebuilding", why)
+		}
+	}
+	if (len(res.Disabled)+len(res.Expired) > 0 || drift) && (*configPath != "" || *reloadCmd != "") {
 		if err := pushToCore(st, *configPath, *reloadCmd); err != nil {
 			fmt.Fprintf(os.Stderr, "core: %v\n", err)
 			_ = st.AddEvent("error", "traffic",

@@ -19,11 +19,12 @@ import (
 
 // Config is everything the bot needs to run.
 type Config struct {
-	Token   string
-	AdminID int64 // who approves receipts
-	Store   *store.Store
-	Apply   *apply.Applier
-	BaseURL string // where customers fetch subscriptions
+	Token      string
+	AdminID    int64 // who approves receipts
+	Store      *store.Store
+	Apply      *apply.Applier
+	BaseURL    string // where customers fetch subscriptions
+	AltBaseURL string // second address for the same subscription token
 
 	CardNumber string
 	CardBank   string
@@ -39,6 +40,16 @@ type Config struct {
 	// InboundID is where new accounts are placed. Zero means the least
 	// loaded one, which is what the panel already does for the CLI.
 	InboundID int64
+
+	// ExportDir keeps a plain-text copy of every bulk order, so the
+	// configs can be recovered by hand if the chat is lost. Empty turns
+	// the copy off.
+	ExportDir string
+
+	// ResellerHost and ResellerSNI are used when the operator creates a
+	// private inbound for a reseller with /resellerinbound.
+	ResellerHost string
+	ResellerSNI  string
 }
 
 // Bot is the running sales front end.
@@ -54,12 +65,13 @@ type Bot struct {
 
 // draft is a purchase being assembled, or a top-up being entered.
 type draft struct {
-	stage string // plan | gb | pay | topup | receipt
+	stage string // plan | gb | pay | topup | receipt | bulk_qty
 	plan  string
 	gb    int
 	order int64
-	kind  string // buy | topup
+	kind  string // buy | topup | bulk
 	topup int64
+	qty   int // configs in a bulk order
 }
 
 // New builds a bot.
@@ -82,6 +94,7 @@ func (b *Bot) Run(ctx context.Context) error {
 	}
 	fmt.Printf("sales bot running as @%s\n", me.Username)
 	_ = b.cfg.Store.AddEvent("info", "bot", "sales bot started as @"+me.Username, "")
+	go b.sweepLoop(ctx)
 
 	offset, _ := b.cfg.Store.BotOffset()
 	for {
@@ -120,6 +133,7 @@ func (b *Bot) handle(ctx context.Context, u Update) {
 				fmt.Sprintf("recovered while handling an update: %v", r), "")
 		}
 	}()
+	alog("update %s", describeUpdate(u))
 	if b.gate(ctx, u) {
 		return
 	}
@@ -189,6 +203,13 @@ func (b *Bot) onMessage(ctx context.Context, u Update) {
 		b.clear(chat)
 		b.askPlan(ctx, bu)
 		return
+	case text == menuBulkText:
+		b.clear(chat)
+		b.askBulk(ctx, bu)
+		return
+	case strings.HasPrefix(text, "/resellerinbound"):
+		b.adminResellerInbound(ctx, bu, text)
+		return
 	case text == menuWalletText:
 		b.clear(chat)
 		b.showWallet(ctx, bu)
@@ -223,6 +244,13 @@ func (b *Bot) onMessage(ctx context.Context, u Update) {
 			return
 		}
 		b.quoteAndAsk(ctx, bu, d, n)
+	case "bulk_qty":
+		n, err := strconv.Atoi(persianDigits(text))
+		if err != nil || n <= 0 {
+			_ = b.api.send(ctx, chat, "لطفاً فقط عدد بفرستید. مثلاً ۲۰", "")
+			return
+		}
+		b.bulkQtyChosen(ctx, bu, d, n)
 	case "topup":
 		n, err := strconv.ParseInt(persianDigits(text), 10, 64)
 		if err != nil || n < 10000 {
@@ -243,11 +271,19 @@ func (b *Bot) sendHome(ctx context.Context, u *store.BotUser) {
 	if u.IsReseller {
 		line += "\nنرخ شما: نصف قیمت مشتری"
 	}
-	kb := replyKeyboard(
-		[]string{menuBuyText, menuWalletText},
-		[]string{menuOrdersText, menuTopupText},
-		[]string{menuSupportText},
-	)
+	rows := [][]string{
+		{menuBuyText, menuWalletText},
+		{menuOrdersText, menuTopupText},
+		{menuSupportText},
+	}
+	if u.IsReseller {
+		rows = [][]string{
+			{menuBuyText, menuBulkText},
+			{menuWalletText, menuOrdersText},
+			{menuTopupText, menuSupportText},
+		}
+	}
+	kb := replyKeyboard(rows...)
 	_ = b.api.send(ctx, u.TelegramID,
 		"سلام "+firstName(u)+"\n\nبه ربات فروش خوش آمدید. منو همیشه پایینِ چت در دسترس است 👇\n\n"+line,
 		kb)
@@ -301,6 +337,10 @@ func (b *Bot) askGB(ctx context.Context, u *store.BotUser, planKey string) {
 }
 
 func (b *Bot) quoteAndAsk(ctx context.Context, u *store.BotUser, d *draft, gb int) {
+	if d.kind == "bulk" {
+		b.bulkQuoteAndAsk(ctx, u, d, gb)
+		return
+	}
 	p, ok := PlanByKey(d.plan)
 	if !ok {
 		b.sendHome(ctx, u)
@@ -327,6 +367,7 @@ func (b *Bot) quoteAndAsk(ctx context.Context, u *store.BotUser, d *draft, gb in
 		msg += fmt.Sprintf("\nقیمت مشتری: %s تومان — شما %s تومان کمتر می‌پردازید",
 			Toman(q.ListPrice), Toman(q.Saved()))
 	}
+	msg += "\n\n" + ExpiryWarning
 	msg += fmt.Sprintf("\n\nموجودی کیف پول: %s تومان", Toman(u.Balance))
 
 	rows := [][]button{}
@@ -376,6 +417,13 @@ func (b *Bot) onCallback(ctx context.Context, u Update) {
 	case strings.HasPrefix(data, "gb:"):
 		n, _ := strconv.Atoi(strings.TrimPrefix(data, "gb:"))
 		b.quoteAndAsk(ctx, bu, b.get(bu.TelegramID), n)
+	case data == "bulk":
+		b.askBulk(ctx, bu)
+	case strings.HasPrefix(data, "bqty:"):
+		n, _ := strconv.Atoi(strings.TrimPrefix(data, "bqty:"))
+		b.bulkQtyChosen(ctx, bu, b.get(bu.TelegramID), n)
+	case strings.HasPrefix(data, "bplan:"):
+		b.askBulkGB(ctx, bu, strings.TrimPrefix(data, "bplan:"))
 	case data == "wallet":
 		b.showWallet(ctx, bu)
 	case data == "topup":
@@ -386,6 +434,8 @@ func (b *Bot) onCallback(ctx context.Context, u Update) {
 			keyboard([]button{{Text: "انصراف", Data: "home"}}))
 	case data == "orders":
 		b.showOrders(ctx, bu)
+	case strings.HasPrefix(data, "renew:"):
+		b.askRenew(ctx, bu, idOf(data))
 	case strings.HasPrefix(data, "paywallet:"):
 		b.payFromWallet(ctx, bu, idOf(data))
 	case strings.HasPrefix(data, "paycard:"):
@@ -425,17 +475,28 @@ func (b *Bot) showOrders(ctx context.Context, u *store.BotUser) {
 	sb.WriteString("سفارش‌های شما\n")
 	for _, o := range list {
 		p, _ := PlanByKey(o.Plan)
-		sb.WriteString(fmt.Sprintf("\n%s · %d گیگابایت · %s تومان · %s",
-			p.Name, o.GB, Toman(o.Price), statusWord(o.Status)))
+		count := ""
+		if o.Quantity > 1 {
+			count = fmt.Sprintf(" · %d کانفیگ", o.Quantity)
+		}
+		sb.WriteString(fmt.Sprintf("\n%s%s · %d گیگابایت · %s تومان · %s",
+			p.Name, count, o.GB, Toman(o.Price), statusWord(o.Status)))
 		if o.Email != "" {
 			sb.WriteString("\n" + o.Email)
 		}
 	}
-	_ = b.api.send(ctx, u.TelegramID, sb.String(),
-		keyboard([]button{{Text: "بازگشت", Data: "home"}}))
+	rows := [][]button{}
+	for _, o := range list {
+		if o.Status == store.OrderDelivered && o.ClientID > 0 && o.Plan == "monthly" {
+			rows = append(rows, []button{{Text: fmt.Sprintf("تمدید سرویس %d", o.ID), Data: fmt.Sprintf("renew:%d", o.ID)}})
+		}
+	}
+	rows = append(rows, []button{{Text: "بازگشت", Data: "home"}})
+	_ = b.api.send(ctx, u.TelegramID, sb.String(), keyboard(rows...))
 }
 
 func (b *Bot) payFromWallet(ctx context.Context, u *store.BotUser, orderID int64) {
+	alog("wallet payment order=%d user=%d", orderID, u.TelegramID)
 	o, err := b.cfg.Store.GetOrder(orderID)
 	if err != nil || o == nil || o.TelegramID != u.TelegramID {
 		return
@@ -458,6 +519,7 @@ func (b *Bot) payFromWallet(ctx context.Context, u *store.BotUser, orderID int64
 /* ── receipts and the operator's decision ─────────────────────────── */
 
 func (b *Bot) onReceipt(ctx context.Context, u *store.BotUser, fileID string) {
+	alog("payment receipt received user=%d", u.TelegramID)
 	d := b.get(u.TelegramID)
 	if d.stage != "receipt" {
 		_ = b.api.send(ctx, u.TelegramID,
@@ -482,8 +544,12 @@ func (b *Bot) onReceipt(ctx context.Context, u *store.BotUser, fileID string) {
 			return
 		}
 		p, _ := PlanByKey(o.Plan)
-		caption = fmt.Sprintf("رسید پرداخت سفارش\n\nاز: %s (%d)\nپلن: %s\nحجم: %d گیگابایت\nمبلغ: %s تومان",
-			who, u.TelegramID, p.Name, o.GB, Toman(o.Price))
+		qtyLine := ""
+		if o.Quantity > 1 {
+			qtyLine = fmt.Sprintf("\nتعداد: %d کانفیگ", o.Quantity)
+		}
+		caption = fmt.Sprintf("رسید پرداخت سفارش\n\nاز: %s (%d)\nپلن: %s%s\nحجم: %d گیگابایت\nمبلغ: %s تومان",
+			who, u.TelegramID, p.Name, qtyLine, o.GB, Toman(o.Price))
 		if o.Price != o.ListPrice {
 			caption += fmt.Sprintf("\n(نرخ فروشنده — قیمت مشتری %s تومان)", Toman(o.ListPrice))
 		}
@@ -503,6 +569,7 @@ func (b *Bot) onReceipt(ctx context.Context, u *store.BotUser, fileID string) {
 }
 
 func (b *Bot) operatorDecision(ctx context.Context, actor *store.BotUser, data string, ok bool) {
+	alog("operator decision approve=%t actor=%d", ok, actor.TelegramID)
 	if b.cfg.AdminID == 0 || actor.TelegramID != b.cfg.AdminID {
 		return // only the operator decides
 	}
@@ -560,6 +627,15 @@ func (b *Bot) operatorDecision(ctx context.Context, actor *store.BotUser, data s
 /* ── delivery ─────────────────────────────────────────────────────── */
 
 func (b *Bot) deliver(ctx context.Context, u *store.BotUser, o *store.Order) {
+	alog("delivery started order=%d user=%d quantity=%d", o.ID, u.TelegramID, o.Quantity)
+	if o.ClientID > 0 {
+		b.renewDelivered(ctx, u, o)
+		return
+	}
+	if o.Quantity > 1 {
+		b.deliverBulk(ctx, u, o)
+		return
+	}
 	p, _ := PlanByKey(o.Plan)
 	// The account name ends up in the core's logs and in the customer's
 	// own app, so it carries the order rather than the buyer's chat id.
@@ -618,7 +694,7 @@ func (b *Bot) deliver(ctx context.Context, u *store.BotUser, o *store.Order) {
 		subURL = strings.TrimRight(b.cfg.BaseURL, "/") + "/sub/" + c.SubToken
 	}
 
-	msg := DeliveryText(p, o.GB, subURL, link, b.cfg.SupportURL)
+	msg := DeliveryText2(p, o.GB, subURL, altSubURL(b.cfg, c.SubToken), link, b.cfg.SupportURL)
 	menu := keyboard(
 		[]button{{Text: "سفارش‌های من", Data: "orders"}},
 		[]button{{Text: "بازگشت", Data: "home"}})
@@ -659,6 +735,7 @@ func (b *Bot) deliver(ctx context.Context, u *store.BotUser, o *store.Order) {
 // state the operator can retry: the money is recorded as paid, the
 // account is not marked delivered, so approving again tries once more.
 func (b *Bot) deliveryFailed(ctx context.Context, u *store.BotUser, o *store.Order, err error) {
+	alog("delivery failed order=%d user=%d", o.ID, u.TelegramID)
 	_ = b.cfg.Store.AddEvent("error", "bot",
 		"could not create the account for order "+fmt.Sprint(o.ID), err.Error())
 	_ = b.api.send(ctx, u.TelegramID,
@@ -675,7 +752,20 @@ func (b *Bot) deliveryFailed(ctx context.Context, u *store.BotUser, o *store.Ord
 // DeliveryText is what the customer reads under the QR code. Both links
 // belong here: the subscription is the one to add to an app, the direct
 // config is for a quick test or an app that cannot take a subscription.
+// altSubURL is the second subscription address for the same token.
+func altSubURL(cfg Config, token string) string {
+	if cfg.AltBaseURL == "" || token == "" {
+		return ""
+	}
+	return strings.TrimRight(cfg.AltBaseURL, "/") + "/sub/" + token
+}
+
 func DeliveryText(p Plan, gb int, subURL, configLink, support string) string {
+	return DeliveryText2(p, gb, subURL, "", configLink, support)
+}
+
+// DeliveryText2 is DeliveryText with an optional second subscription address.
+func DeliveryText2(p Plan, gb int, subURL, altURL, configLink, support string) string {
 	expiry := "بدون انقضای زمانی"
 	if p.Days > 0 {
 		expiry = fmt.Sprintf("%d روز از اولین اتصال", p.Days)
@@ -684,6 +774,9 @@ func DeliveryText(p Plan, gb int, subURL, configLink, support string) string {
 		p.Name, gb, expiry)
 	if subURL != "" {
 		msg += "\nلینک اشتراک (این را در برنامه اضافه کنید):\n" + subURL + "\n"
+	}
+	if altURL != "" {
+		msg += "\nلینک اشتراک دوم (اگر لینک اول کار نکرد):\n" + altURL + "\n"
 	}
 	if configLink != "" {
 		msg += "\nلینک مستقیم کانفیگ:\n" + configLink + "\n"
@@ -706,6 +799,7 @@ const (
 	menuOrdersText  = "📦 سفارش‌های من"
 	menuTopupText   = "➕ شارژ کیف پول"
 	menuSupportText = "☎️ پشتیبانی"
+	menuBulkText    = "🛍 خرید گروهی"
 )
 
 /* ── small helpers ────────────────────────────────────────────────── */

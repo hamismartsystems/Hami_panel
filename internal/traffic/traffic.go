@@ -156,6 +156,11 @@ type Result struct {
 // back: this function runs in its own process, minutes apart from the
 // panel, and a whole-row write would roll back anything the operator
 // changed in between.
+// predictiveCap bounds how far ahead of the quota a client may be cut.
+// predictiveCap is 0: the owner decided no customer loses any of the volume
+// they bought, so a client is switched off only once the quota is used up.
+const predictiveCap int64 = 0
+
 func Apply(st *store.Store, samples []Sample, now time.Time) (Result, error) {
 	var res Result
 	clients, err := st.ListAllClients()
@@ -223,11 +228,25 @@ func Apply(st *store.Store, samples []Sample, now time.Time) (Result, error) {
 		if err != nil {
 			return res, fmt.Errorf("%s: %w", c.Email, err)
 		}
-		if fresh.ActiveNow(now) {
+		// Predictive switch-off. The core is read about once a minute, so a
+		// customer who would pass the quota before the next read is cut now,
+		// using this round's traffic as the estimate. The margin is capped so
+		// one burst cannot cut a customer much too early.
+		used := fresh.UpBytes + fresh.DownBytes
+		margin := int64(0)
+		if moved {
+			margin = 2 * (s.Up + s.Down)
+			if margin > predictiveCap {
+				margin = predictiveCap
+			}
+		}
+		nearQuota := fresh.TotalBytes > 0 && used < fresh.TotalBytes && used+margin >= fresh.TotalBytes
+		if fresh.ActiveNow(now) && !nearQuota {
 			continue
 		}
+		expired := fresh.ExpireAt != nil && !now.Before(fresh.ExpireAt.UTC())
 		who := strings.ToLower(strings.TrimSpace(s.Email))
-		isQuota := fresh.TotalBytes > 0 && fresh.UpBytes+fresh.DownBytes >= fresh.TotalBytes
+		isQuota := fresh.TotalBytes > 0 && (used >= fresh.TotalBytes || (nearQuota && !expired))
 		if err := st.SetClientEnabled(c.ID, false); err != nil {
 			return res, fmt.Errorf("%s: disabling (%s): %w", c.Email, fresh.WhyInactive(now), err)
 		}

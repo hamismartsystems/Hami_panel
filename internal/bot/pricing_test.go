@@ -13,15 +13,11 @@ func TestTheOperatorsPrices(t *testing.T) {
 	if !ok {
 		t.Fatal("no monthly plan")
 	}
-	forever, ok := PlanByKey("forever")
-	if !ok {
-		t.Fatal("no untimed plan")
+	if _, ok := PlanByKey("forever"); ok {
+		t.Fatal("the untimed plan must not be sold on the sales bot")
 	}
-	if monthly.PerGB != 20000 || monthly.Days != 31 {
+	if monthly.PerGB != 10000 || monthly.Days != 31 {
 		t.Errorf("monthly is %d toman per GB for %d days", monthly.PerGB, monthly.Days)
-	}
-	if forever.PerGB != 50000 || forever.Days != 0 {
-		t.Errorf("untimed is %d toman per GB, days %d", forever.PerGB, forever.Days)
 	}
 
 	for _, tc := range []struct {
@@ -29,12 +25,9 @@ func TestTheOperatorsPrices(t *testing.T) {
 		gb    int
 		price int64
 	}{
-		{"monthly", 1, 20000},
-		{"monthly", 10, 200000},
-		{"monthly", 50, 1000000},
-		{"forever", 1, 50000},
-		{"forever", 10, 500000},
-		{"forever", 30, 1500000},
+		{"monthly", 1, 10000},
+		{"monthly", 10, 100000},
+		{"monthly", 50, 500000},
 	} {
 		p, _ := PlanByKey(tc.plan)
 		q, err := QuoteFor(p, tc.gb, false)
@@ -260,5 +253,35 @@ func TestDeliveryTextForTheUntimedPlan(t *testing.T) {
 	}
 	if strings.Contains(msg, "پشتیبانی") {
 		t.Error("a support line appeared with no support url configured")
+	}
+}
+
+func TestQuoteBulkTotalsAndCaps(t *testing.T) {
+	monthly := Plans[0] // 20,000 toman per GB
+	// 10 configs × 10 GB × 20,000 = 2,000,000 at the ordinary price.
+	q, err := QuoteBulk(monthly, 10, 10, false)
+	if err != nil || q.ListPrice != 1000000 || q.Price != 1000000 || q.Qty != 10 {
+		t.Fatalf("customer bulk = %+v, %v", q, err)
+	}
+	r, err := QuoteBulk(monthly, 10, 10, true)
+	if err != nil || r.Price != 500000 || r.ListPrice != 1000000 || r.Saved() != 500000 {
+		t.Fatalf("reseller bulk = %+v, %v", r, err)
+	}
+	// Same total as the arithmetic a single order would give.
+	one, _ := QuoteFor(monthly, 10, true)
+	if r.Price != 10*one.Price {
+		t.Fatalf("reseller bulk %d != 10 × single %d", r.Price, one.Price)
+	}
+	if _, err := QuoteBulk(monthly, 10, 0, false); err == nil {
+		t.Fatal("zero configs must be refused")
+	}
+	if _, err := QuoteBulk(monthly, 10, MaxBulk+1, false); err == nil {
+		t.Fatal("more than MaxBulk configs must be refused")
+	}
+	if _, err := QuoteBulk(monthly, 0, 5, false); err == nil {
+		t.Fatal("zero gigabytes must be refused")
+	}
+	if _, err := QuoteBulk(monthly, MaxGB+1, 1, false); err == nil {
+		t.Fatal("volume above MaxGB must be refused")
 	}
 }

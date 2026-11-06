@@ -142,7 +142,7 @@ func (s *Server) Routes() http.Handler {
 		s.live.start()
 	}
 
-	return securityHeaders(mux)
+	return securityHeaders(actionLog(mux))
 }
 
 func writeHTML(w http.ResponseWriter, body string) {

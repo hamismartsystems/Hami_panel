@@ -65,7 +65,11 @@ func noticeCmd(args []string) int {
 
 // sendTelegram posts the message via the Bot API. `tgt` is "token:chatid".
 func sendTelegram(tgt, text string) error {
-	parts := strings.SplitN(tgt, ":", 2)
+	// The token itself contains a colon (id:secret), so split at the LAST colon.
+	parts := []string{tgt[:max(strings.LastIndex(tgt, ":"), 0)], tgt[strings.LastIndex(tgt, ":")+1:]}
+	if strings.LastIndex(tgt, ":") < 0 {
+		parts = []string{tgt}
+	}
 	if len(parts) != 2 {
 		return fmt.Errorf(`telegram target must be "TOKEN:CHATID"`)
 	}

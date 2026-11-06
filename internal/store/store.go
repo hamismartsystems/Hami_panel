@@ -198,6 +198,24 @@ var migrations = []string{
 	`ALTER TABLE clients ADD COLUMN activate_days INTEGER NOT NULL DEFAULT 0;`,
 	`CREATE INDEX IF NOT EXISTS idx_clients_activate
 		ON clients(activate_days) WHERE activate_days > 0;`,
+	// Positions 30 and 31 are placeholders. The live database is already
+	// at user_version 31, but this source tree lists 29 statements, so
+	// without them the bulk-sale statements below would land on versions
+	// the live database has already claimed and never run.
+	"-- placeholder for live schema version 30\nSELECT 1;",
+	"-- placeholder for live schema version 31\nSELECT 1;",
+	// Bulk sales for resellers: how many accounts one order produces,
+	// which private inbound a reseller's accounts go on, and which
+	// account each slice of a bulk order became. Appended last.
+	`ALTER TABLE bot_orders ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1;`,
+	`ALTER TABLE bot_users ADD COLUMN reseller_inbound_id INTEGER NOT NULL DEFAULT 0;`,
+	`CREATE TABLE IF NOT EXISTS bot_order_clients (
+		order_id  INTEGER NOT NULL REFERENCES bot_orders(id) ON DELETE CASCADE,
+		seq       INTEGER NOT NULL,
+		client_id INTEGER NOT NULL,
+		email     TEXT NOT NULL,
+		PRIMARY KEY (order_id, seq)
+	);`,
 }
 
 func (s *Store) migrate() error {
