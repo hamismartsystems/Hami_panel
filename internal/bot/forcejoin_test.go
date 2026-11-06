@@ -9,9 +9,9 @@ import (
 
 func TestJoinChannels(t *testing.T) {
 	cases := map[string][]string{
-		"":                                            nil,
-		"@a":                                          {"@a"},
-		" @a , @b,,@a ":                               {"@a", "@b"},
+		"":              nil,
+		"@a":            {"@a"},
+		" @a , @b,,@a ": {"@a", "@b"},
 		"@scienceandtechnology2020\n@scorpionvpn2026": {"@scienceandtechnology2020", "@scorpionvpn2026"},
 	}
 	for in, want := range cases {
