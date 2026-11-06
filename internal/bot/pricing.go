@@ -21,8 +21,7 @@ type Plan struct {
 // because it also expires; the untimed one costs more for the same
 // volume precisely because it does not.
 var Plans = []Plan{
-	{Key: "monthly", Name: "ماهانه", PerGB: 20000, Days: 31},
-	{Key: "forever", Name: "زمان نامحدود", PerGB: 50000, Days: 0},
+	{Key: "monthly", Name: "ماهانه", PerGB: 10000, Days: 31},
 }
 
 // PlanByKey finds one, or false.
@@ -45,10 +44,39 @@ type Quote struct {
 	ListPrice int64 // the ordinary customer price
 	Price     int64 // what this buyer pays
 	Reseller  bool
+	Qty       int // accounts in the order; 0 or 1 means a single account
 }
 
 // Saved is the discount in toman.
 func (q Quote) Saved() int64 { return q.ListPrice - q.Price }
+
+// MaxBulk caps how many accounts one bulk order may produce.
+const MaxBulk = 50
+
+// QuoteBulk prices an order of qty accounts of gb gigabytes each. The
+// total is qty × gb × the per-gigabyte rate, and a reseller pays half of
+// that total, the same rule QuoteFor applies to a single account.
+func QuoteBulk(p Plan, gb, qty int, reseller bool) (Quote, error) {
+	if qty < 1 {
+		return Quote{}, fmt.Errorf("at least one config is needed")
+	}
+	if qty > MaxBulk {
+		return Quote{}, fmt.Errorf("a bulk order can have at most %d configs", MaxBulk)
+	}
+	q, err := QuoteFor(p, gb, reseller)
+	if err != nil {
+		return Quote{}, err
+	}
+	list := int64(qty) * q.ListPrice
+	price := list
+	if reseller {
+		price = list / 2
+	}
+	q.Qty = qty
+	q.ListPrice = list
+	q.Price = price
+	return q, nil
+}
 
 // QuoteFor prices an order. A reseller pays half; the halving is done on
 // the total rather than the per-gigabyte rate so the arithmetic matches

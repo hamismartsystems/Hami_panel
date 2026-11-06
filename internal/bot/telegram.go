@@ -158,7 +158,9 @@ func (a *api) send(ctx context.Context, chat int64, text, markup string) error {
 	if markup != "" {
 		v.Set("reply_markup", markup)
 	}
-	return a.call(ctx, "sendMessage", v, nil)
+	err := a.call(ctx, "sendMessage", v, nil)
+	alog("message sent to chat %d (%d chars) ok=%t", chat, len(text), err == nil)
+	return err
 }
 
 func (a *api) answer(ctx context.Context, id, text string) error {
@@ -210,7 +212,7 @@ func replyKeyboard(rows ...[]string) string {
 		kb = append(kb, row)
 	}
 	b, _ := json.Marshal(map[string]any{
-		"keyboard": kb, "resize_keyboard": true, "is_persistent": true})
+		"keyboard": kb, "resize_keyboard": true, "is_persistent": false})
 	return string(b)
 }
 

@@ -49,6 +49,7 @@ func botServe(args []string) int {
 	token := fs.String("token", os.Getenv("HAMI_BOT_TOKEN"), "")
 	admin := fs.Int64("admin", 0, "telegram id that approves receipts")
 	baseURL := fs.String("base-url", "", "where customers fetch subscriptions")
+	altBaseURL := fs.String("alt-base-url", "https://subr1.hamismartsystems.shop:2052", "second subscription address (same token)")
 	card := fs.String("card", "", "")
 	bank := fs.String("bank", "", "")
 	holder := fs.String("holder", "", "")
@@ -57,6 +58,9 @@ func botServe(args []string) int {
 	inbound := fs.Int64("inbound", 0, "inbound for new accounts; 0 = least loaded")
 	xrayConfig := fs.String("xray-config", "", "")
 	reloadCmd := fs.String("reload-cmd", "systemctl restart hami-xray", "")
+	exportDir := fs.String("export-dir", "/root/hami/bot-exports", "plain-text copies of bulk orders, kept for emergencies; empty disables")
+	resellerHost := fs.String("reseller-host", "", "public host written into reseller private inbounds")
+	resellerSNI := fs.String("reseller-sni", "", "SNI borrowed for reseller private inbounds")
 	forceJoin := fs.String("force-join", os.Getenv("HAMI_FORCE_JOIN_CHANNEL"), "channel customers must join before the shop answers; empty disables")
 	fs.SetOutput(os.Stderr)
 	if err := fs.Parse(args); err != nil {
@@ -90,9 +94,12 @@ func botServe(args []string) int {
 
 	b, err := bot.New(bot.Config{
 		Token: *token, AdminID: *admin, Store: st, Apply: applier,
-		BaseURL: *baseURL, CardNumber: *card, CardBank: *bank,
+		BaseURL: *baseURL, AltBaseURL: *altBaseURL, CardNumber: *card, CardBank: *bank,
 		CardHolder: *holder, SupportURL: *support, InboundID: *inbound,
 		ForceJoinChannel: *forceJoin,
+		ExportDir:        *exportDir,
+		ResellerHost:     *resellerHost,
+		ResellerSNI:      *resellerSNI,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "bot: %v\n", err)

@@ -21,6 +21,7 @@ import (
 )
 
 func main() {
+	cliLog()
 	if len(os.Args) < 2 {
 		usage()
 		os.Exit(2)

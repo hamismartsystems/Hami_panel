@@ -31,6 +31,7 @@ type Order struct {
 	TelegramID int64
 	Plan       string // "monthly" or "forever"
 	GB         int
+	Quantity   int   // accounts in the order; 1 for an ordinary purchase
 	Price      int64 // what this buyer pays, after any discount
 	ListPrice  int64 // what a normal customer would pay
 	Status     string
@@ -156,11 +157,14 @@ func (s *Store) CreateOrder(o *Order) error {
 	if o.Status == "" {
 		o.Status = OrderPending
 	}
+	if o.Quantity < 1 {
+		o.Quantity = 1
+	}
 	res, err := s.db.Exec(`INSERT INTO bot_orders (telegram_id, plan, gb, price,
-		list_price, status, paid_from, client_id, email, created_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		list_price, status, paid_from, client_id, email, created_at, quantity)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
 		o.TelegramID, o.Plan, o.GB, o.Price, o.ListPrice, o.Status,
-		o.PaidFrom, o.ClientID, o.Email, o.CreatedAt.Format(time.RFC3339))
+		o.PaidFrom, o.ClientID, o.Email, o.CreatedAt.Format(time.RFC3339), o.Quantity)
 	if err != nil {
 		return err
 	}
@@ -173,9 +177,9 @@ func (s *Store) GetOrder(id int64) (*Order, error) {
 	var o Order
 	var created string
 	err := s.db.QueryRow(`SELECT id, telegram_id, plan, gb, price, list_price,
-		status, paid_from, client_id, email, created_at FROM bot_orders WHERE id = ?`, id).
+		status, paid_from, client_id, email, created_at, quantity FROM bot_orders WHERE id = ?`, id).
 		Scan(&o.ID, &o.TelegramID, &o.Plan, &o.GB, &o.Price, &o.ListPrice,
-			&o.Status, &o.PaidFrom, &o.ClientID, &o.Email, &created)
+			&o.Status, &o.PaidFrom, &o.ClientID, &o.Email, &created, &o.Quantity)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -215,7 +219,7 @@ func (s *Store) OrdersOf(telegramID int64, limit int) ([]Order, error) {
 		limit = 20
 	}
 	rows, err := s.db.Query(`SELECT id, telegram_id, plan, gb, price, list_price,
-		status, paid_from, client_id, email, created_at FROM bot_orders
+		status, paid_from, client_id, email, created_at, quantity FROM bot_orders
 		WHERE telegram_id = ? ORDER BY id DESC LIMIT ?`, telegramID, limit)
 	if err != nil {
 		return nil, err
@@ -227,7 +231,7 @@ func (s *Store) OrdersOf(telegramID int64, limit int) ([]Order, error) {
 		var created string
 		if err := rows.Scan(&o.ID, &o.TelegramID, &o.Plan, &o.GB, &o.Price,
 			&o.ListPrice, &o.Status, &o.PaidFrom, &o.ClientID, &o.Email,
-			&created); err != nil {
+			&created, &o.Quantity); err != nil {
 			return nil, err
 		}
 		o.CreatedAt, _ = time.Parse(time.RFC3339, created)

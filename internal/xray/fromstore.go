@@ -41,6 +41,12 @@ func endpointsAt(st *store.Store, now time.Time) ([]Endpoint, error) {
 		if err != nil {
 			return nil, err
 		}
+		// An inbound with no client at all (a reseller inbound saved before its
+		// first sale) cannot go into the core config: Build refuses it, and that
+		// one inbound would then block every apply. It is left out until a client exists.
+		if len(clients) == 0 {
+			continue
+		}
 		enabled := make([]link.Client, 0, len(clients))
 		for _, c := range clients {
 			if !c.ActiveNow(now) {

@@ -80,10 +80,10 @@ func TestUsageAccumulatesAcrossRuns(t *testing.T) {
 
 func TestQuotaIsEnforcedNotJustDisplayed(t *testing.T) {
 	st := openStore(t)
-	seedClient(t, st, "reza", 1000)
+	seedClient(t, st, "reza", 10_000_000_000) // 10 GB
 	now := time.Now()
 
-	res, err := Apply(st, []Sample{{Email: "reza", Up: 400, Down: 400}}, now)
+	res, err := Apply(st, []Sample{{Email: "reza", Up: 2_000_000_000, Down: 2_000_000_000}}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestQuotaIsEnforcedNotJustDisplayed(t *testing.T) {
 		t.Fatal("client was switched off early")
 	}
 
-	res, err = Apply(st, []Sample{{Email: "reza", Up: 100, Down: 200}}, now)
+	res, err = Apply(st, []Sample{{Email: "reza", Up: 3_000_000_000, Down: 3_100_000_000}}, now)
 	if err != nil {
 		t.Fatal(err)
 	}

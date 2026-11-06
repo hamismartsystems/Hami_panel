@@ -52,24 +52,24 @@ func (s *Server) handleSub(w http.ResponseWriter, r *http.Request) {
 	c, err := s.Store.ClientBySubToken(token)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			http.Error(w, "unknown subscription", http.StatusNotFound)
+			subErr(r, w, "unknown subscription", http.StatusNotFound)
 			return
 		}
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		subErr(r, w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
 	now := s.now()
 	entries, err := Entries(s.Store, *c, now)
 	if err != nil {
-		http.Error(w, "config error", http.StatusInternalServerError)
+		subErr(r, w, "config error", http.StatusInternalServerError)
 		return
 	}
 
 	format := FormatFor(r.UserAgent(), r.URL.Query().Get("format"))
 	body, err := Render(entries, format)
 	if err != nil {
-		http.Error(w, "render error", http.StatusInternalServerError)
+		subErr(r, w, "render error", http.StatusInternalServerError)
 		return
 	}
 
@@ -118,10 +118,10 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	c, err := s.Store.ClientBySubToken(token)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			http.Error(w, "unknown subscription", http.StatusNotFound)
+			subErr(r, w, "unknown subscription", http.StatusNotFound)
 			return
 		}
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		subErr(r, w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	now := s.now()

@@ -168,7 +168,7 @@ func BuildWithStats(endpoints []Endpoint, apiPort int) ([]byte, error) {
 	}
 
 	doc := map[string]any{
-		"log":      map[string]any{"loglevel": "warning"},
+		"log":      map[string]any{"loglevel": "info"},
 		"inbounds": inbounds,
 		"outbounds": []any{
 			map[string]any{"protocol": "freedom", "tag": "direct"},
